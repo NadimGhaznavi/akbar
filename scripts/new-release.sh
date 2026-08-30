@@ -29,12 +29,17 @@ die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 usage() {
     local current_version=""
     local likely_version="0.1.0"
+    local likely_feature_version="0.1.1"
 
     if [[ -f "${CONSTANTS_FILE}" ]]; then
         current_version=$(sed -nE 's/^    VERSION: Final\[str\] = "([^"]+)"$/\1/p' "${CONSTANTS_FILE}")
     fi
     if [[ "${current_version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
-        likely_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} + 1))"
+        local major=${BASH_REMATCH[1]}
+        local minor=${BASH_REMATCH[2]}
+        local release_patch=$((10#${BASH_REMATCH[3]} + 1))
+        likely_version="${major}.${minor}.${release_patch}"
+        likely_feature_version="${major}.${minor}.$((release_patch + 1))"
     fi
 
     cat <<EOF
@@ -43,7 +48,7 @@ Usage: $(basename -- "$0") <version> <message> <next-feature-branch>
 Likely next version: ${likely_version}
 
 Example:
-  $(basename -- "$0") ${likely_version} "Initial release" feat/next
+  $(basename -- "$0") ${likely_version} "Maintenance release" feat/maint-${likely_feature_version}
 
 Run this from a clean feat/* or feature/* branch. The script updates the
 changelog, merges the feature through dev to main, creates an annotated vX.Y.Z
