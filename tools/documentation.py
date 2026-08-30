@@ -1,27 +1,24 @@
-"""Self-documentation MCP tools for Akbar."""
+"""Self-documentation MCP tools."""
 
 from tools.server import mcp
 
 
 @mcp.tool()
 def doc_00_intro() -> str:
-    """Read first: describe Akbar's role and available operating guidance."""
+    """Return a short introduction to the project."""
     return (
-        "Your role is to run deliberate, evidence-driven AI Snake Lab "
-        "experiments. Use the numbered doc tools for operating guidance. Inspect "
-        "authoritative service and database-backed results through tools instead "
-        "of assuming state from conversation. Run at most one experiment at a "
-        "time and use accumulated results to justify each next decision."
+        "This project uses an AI assistent to run experiments in the AI Snake Lab. "
+        "This Qwen based assistant and this project have been named Akbar."
     )
 
 
 @mcp.tool()
 def doc_01_overview() -> str:
-    """Return a short overview of Akbar."""
+    """Return a short overview of the project goal."""
     return (
-        "An experiment represents one simulation run of AI Snake Lab. "
-        "The goal is to find a hyperparameter "
-        "configuration that maximizes the score. "
+        "An experiment is a controlled batch of 135 AI Snake Lab simulations. "
+        "Akbar proposes three hyperparameter values and reviews the raw stored "
+        "simulation results without the experiment service judging them."
     )
 
 
@@ -29,10 +26,10 @@ def doc_01_overview() -> str:
 def doc_02_configure_experiment() -> str:
     """Return a short description of how to configure an experiment."""
     return (
-        "Call get_experiment_config first to inspect the active configuration "
-        "and its current limits. Use set_experiment_epochs or "
-        "set_experiment_learning_rate to change one value for subsequent runs. "
-        "Configuration changes are rejected while an experiment is active."
+        "Submit learning_rate, epsilon_start, and epsilon_decay to "
+        "start_experiment. The service varies each value by 5 percent to form "
+        "a 3 x 3 x 3 grid, then runs every configuration with five fixed seeds. "
+        "Every simulation runs for exactly 1500 epochs."
     )
 
 
@@ -40,11 +37,11 @@ def doc_02_configure_experiment() -> str:
 def doc_03_run_experiment() -> str:
     """Return a short description of how to run an experiment."""
     return (
-        "Call start_experiment once and retain the returned experiment ID. "
+        "Call start_experiment once with the three baseline hyperparameters and "
+        "retain the returned experiment ID. "
         "Do not issue another start while an experiment is queued or running. "
         "Use get_experiment_status to monitor it. After its status becomes "
-        "completed, use get_experiment_result to retrieve the persisted result. "
-        "Use list_experiment_results to discover recent completed runs."
+        "completed, query its individual simulation rows in MariaDB."
     )
 
 
@@ -52,11 +49,11 @@ def doc_03_run_experiment() -> str:
 def doc_04_review_results() -> str:
     """Return a short description of how to review previous results."""
     return (
-        "Call list_experiment_results to retrieve compact summaries of recent "
-        "completed experiments. The optional limit defaults to 10 and must be "
-        "between 1 and 100. Compare the configuration and score metrics in the "
-        "summaries, then pass an experiment ID to get_experiment_result when "
-        "you need that run's full persisted result."
+        "Call get_experiment_database_schema to discover tables and columns, "
+        "then call query_experiment_database with one read-only SELECT or CTE. "
+        "Filtering, joins, grouping, aggregation, and ordering are available; "
+        "their interpretation belongs to Akbar. Use PyMySQL placeholders (%s "
+        "or %(name)s) and pass values separately in parameters."
     )
 
 
@@ -65,10 +62,9 @@ def doc_05_design_next_experiment() -> str:
     """Describe the safe evidence-driven next-experiment decision cycle."""
     return (
         "The scheduled workflow is deterministic. When no experiment is active, "
-        "the scheduler loads the current configuration and recent completed "
-        "results, then asks the language model once to compare the old runs and "
-        "return a structured next configuration with a rationale. Python validates "
-        "and persists that proposal, applies it, and starts exactly one experiment. "
+        "the scheduler loads raw completed simulation rows, then asks the language "
+        "model once for learning-rate, initial-epsilon, and epsilon-decay values. "
+        "Python validates and persists that proposal and starts one experiment. "
         "Interactive users may inspect or control experiments through the tools, "
         "but tool calling is not part of scheduled workflow management."
     )

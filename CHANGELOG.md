@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-30 @ 19:55
+
+### Added
+
+- Added deterministic 27-configuration hyperparameter grids across five fixed
+  seeds, producing 135 separately persisted simulation runs per experiment.
+- Added schema discovery and arbitrary single-statement read-only SQL tools for
+  Akbar's analysis of experiment data.
+
+### Changed
+
+- Fixed every simulation at 1,500 epochs and expanded scheduler proposals to
+  learning rate, initial epsilon, and epsilon decay.
+- Kept result interpretation with Akbar instead of ranking or aggregating
+  simulation data in the experiment service.
+
 ## [0.11.7] - 2026-08-30 @ 09:25
 
 ## [0.11.6] - 2026-08-30 @ 09:12

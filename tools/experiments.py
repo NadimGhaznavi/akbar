@@ -12,9 +12,20 @@ def ping_experiment_service() -> dict[str, str]:
 
 
 @mcp.tool()
-def start_experiment() -> dict:
-    """Start one experiment using the active persisted configuration."""
-    return ExperimentClient().request(MessageType.START_EXPERIMENT)
+def start_experiment(
+    learning_rate: float,
+    epsilon_start: float,
+    epsilon_decay: float,
+) -> dict:
+    """Start a 135-simulation experiment around three submitted values."""
+    return ExperimentClient().request(
+        MessageType.START_EXPERIMENT,
+        {
+            "learning_rate": learning_rate,
+            "epsilon_start": epsilon_start,
+            "epsilon_decay": epsilon_decay,
+        },
+    )
 
 
 @mcp.tool()
@@ -24,20 +35,30 @@ def get_experiment_config() -> dict:
 
 
 @mcp.tool()
-def set_experiment_epochs(epochs: int) -> dict:
-    """Set the number of epochs used by subsequent experiments."""
-    return ExperimentClient().request(
-        MessageType.SET_EXPERIMENT_CONFIG,
-        {"epochs": epochs},
-    )
-
-
-@mcp.tool()
 def set_experiment_learning_rate(learning_rate: float) -> dict:
     """Set the learning rate used by subsequent experiments."""
     return ExperimentClient().request(
         MessageType.SET_EXPERIMENT_CONFIG,
         {"learning_rate": learning_rate},
+    )
+
+
+@mcp.tool()
+def get_experiment_database_schema() -> dict:
+    """Describe readable database tables and columns for SQL analysis."""
+    return ExperimentClient().request(MessageType.GET_DATABASE_SCHEMA)
+
+
+@mcp.tool()
+def query_experiment_database(
+    sql: str,
+    parameters: dict | list | None = None,
+    max_rows: int = 1000,
+) -> dict:
+    """Execute one arbitrary read-only SQL query against Akbar's database."""
+    return ExperimentClient().request(
+        MessageType.EXECUTE_READ_QUERY,
+        {"sql": sql, "parameters": parameters, "max_rows": max_rows},
     )
 
 
@@ -51,24 +72,6 @@ def get_experiment_status(experiment_id: str = "") -> dict:
     return ExperimentClient().request(
         MessageType.GET_EXPERIMENT_STATUS,
         experiment_id=experiment_id or None,
-    )
-
-
-@mcp.tool()
-def get_experiment_result(experiment_id: str) -> dict:
-    """Return the completed, persisted result for an experiment ID."""
-    return ExperimentClient().request(
-        MessageType.GET_EXPERIMENT_RESULT,
-        experiment_id=experiment_id,
-    )
-
-
-@mcp.tool()
-def list_experiment_results(limit: int = 100) -> dict:
-    """List summaries of the most recent completed experiment results."""
-    return ExperimentClient().request(
-        MessageType.LIST_EXPERIMENT_RESULTS,
-        {"limit": limit},
     )
 
 

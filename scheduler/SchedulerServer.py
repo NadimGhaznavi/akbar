@@ -28,8 +28,9 @@ class PlanningError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class ExperimentProposal:
-    epochs: int
     learning_rate: float
+    epsilon_start: float
+    epsilon_decay: float
     rationale: str
 
     @classmethod
@@ -38,33 +39,44 @@ class ExperimentProposal:
         data: dict[str, Any],
         config: dict[str, Any],
     ) -> ExperimentProposal:
-        if set(data) != {"epochs", "learning_rate", "rationale"}:
+        if set(data) != {
+            "learning_rate", "epsilon_start", "epsilon_decay", "rationale"
+        }:
             raise PlanningError(
-                "proposal must contain only epochs, learning_rate, and rationale"
+                "proposal must contain learning_rate, epsilon_start, "
+                "epsilon_decay, and rationale"
             )
-        epochs = data["epochs"]
         learning_rate = data["learning_rate"]
+        epsilon_start = data["epsilon_start"]
+        epsilon_decay = data["epsilon_decay"]
         rationale = data["rationale"]
-        if isinstance(epochs, bool) or not isinstance(epochs, int):
-            raise PlanningError("proposal epochs must be an integer")
-        if isinstance(learning_rate, bool) or not isinstance(
-            learning_rate, (int, float)
+        for name, value in (
+            ("learning_rate", learning_rate),
+            ("epsilon_start", epsilon_start),
+            ("epsilon_decay", epsilon_decay),
         ):
-            raise PlanningError("proposal learning_rate must be a number")
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise PlanningError(f"proposal {name} must be a number")
         if not isinstance(rationale, str) or not rationale.strip():
             raise PlanningError("proposal rationale must be non-empty text")
         limits = config["limits"]
-        epoch_limits = limits["epochs"]
         rate_limits = limits["learning_rate"]
-        if not epoch_limits["minimum"] <= epochs <= epoch_limits["maximum"]:
-            raise PlanningError("proposal epochs are outside the configured limits")
         if not (
             rate_limits["minimum"] <= float(learning_rate) <= rate_limits["maximum"]
         ):
             raise PlanningError(
                 "proposal learning_rate is outside the configured limits"
             )
-        return cls(epochs, float(learning_rate), rationale.strip())
+        if not 0 < float(epsilon_start) <= 1:
+            raise PlanningError("proposal epsilon_start must be above 0 and at most 1")
+        if not 0 < float(epsilon_decay) < 1:
+            raise PlanningError("proposal epsilon_decay must be between 0 and 1")
+        return cls(
+            float(learning_rate),
+            float(epsilon_start),
+            float(epsilon_decay),
+            rationale.strip(),
+        )
 
 
 class Planner(Protocol):
@@ -200,10 +212,21 @@ class Scheduler:
 
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
         history = await self._request(
-            MessageType.LIST_EXPERIMENT_RESULTS,
-            {"limit": DScheduler.RESULT_HISTORY_LIMIT},
+            MessageType.EXECUTE_READ_QUERY,
+            {
+                "sql": (
+                    "SELECT simulation_id, experiment_id, seed, epochs, "
+                    "learning_rate, epsilon_start, epsilon_decay, highscore, "
+                    "average_score, average_loss, total_moves, replay_size, "
+                    "elapsed_seconds, "
+                    "completed_at FROM simulation_runs "
+                    "WHERE status = 'completed' ORDER BY completed_at DESC LIMIT %s"
+                ),
+                "parameters": [DScheduler.RESULT_HISTORY_LIMIT],
+                "max_rows": DScheduler.RESULT_HISTORY_LIMIT,
+            },
         )
-        results = history.get("results")
+        results = history.get("rows")
         if not isinstance(results, list):
             raise PlanningError("experiment service returned invalid result history")
 
@@ -219,11 +242,19 @@ class Scheduler:
             await self._request(
                 MessageType.SET_EXPERIMENT_CONFIG,
                 {
-                    "epochs": proposal.epochs,
                     "learning_rate": proposal.learning_rate,
+                    "epsilon_start": proposal.epsilon_start,
+                    "epsilon_decay": proposal.epsilon_decay,
                 },
             )
-            accepted = await self._request(MessageType.START_EXPERIMENT)
+            accepted = await self._request(
+                MessageType.START_EXPERIMENT,
+                {
+                    "learning_rate": proposal.learning_rate,
+                    "epsilon_start": proposal.epsilon_start,
+                    "epsilon_decay": proposal.epsilon_decay,
+                },
+            )
             experiment_id = accepted["experiment_id"]
             await asyncio.to_thread(self.plans.mark_started, plan_id, experiment_id)
         except Exception as error:
