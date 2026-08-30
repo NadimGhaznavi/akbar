@@ -57,6 +57,10 @@ APPLICATION_FILES = (
         Path("experiment/ExperimentConfig.py"),
     ),
     (
+        Path("experiment/ExperimentDesign.py"),
+        Path("experiment/ExperimentDesign.py"),
+    ),
+    (
         Path("experiment/ExperimentProtocol.py"),
         Path("experiment/ExperimentProtocol.py"),
     ),
