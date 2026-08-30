@@ -17,12 +17,18 @@ from experiment.ExperimentServer import ExperimentServer
 class MemoryRepository:
     def __init__(self) -> None:
         self.records: dict[str, dict[str, Any]] = {}
+        self.next_seed = 1970
 
     def initialize(self) -> None:
         pass
 
     def mark_interrupted(self) -> None:
         pass
+
+    def allocate_seed(self) -> int:
+        seed = self.next_seed
+        self.next_seed += 1
+        return seed
 
     def create(self, experiment_id: str, config: dict[str, Any]) -> None:
         self.records[experiment_id] = {
@@ -209,6 +215,24 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
             payload={"suffix": experiment_id[-4:]},
         )
         self.assertEqual(resolved["experiment_id"], experiment_id)
+
+    async def test_each_experiment_gets_the_next_persisted_seed(self) -> None:
+        first = await self.request(MessageType.START_EXPERIMENT)
+        first_id = first["experiment_id"]
+        for _ in range(30):
+            first_status = await self.request(
+                MessageType.GET_EXPERIMENT_STATUS,
+                experiment_id=first_id,
+            )
+            if first_status["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+        self.assertEqual(first_status["status"], "completed")
+
+        second = await self.request(MessageType.START_EXPERIMENT)
+        self.assertEqual(first["config"]["seed"], 1970)
+        self.assertEqual(second["config"]["seed"], 1971)
+        self.assertEqual(self.repository.records[first_id]["config"]["seed"], 1970)
 
 
 if __name__ == "__main__":

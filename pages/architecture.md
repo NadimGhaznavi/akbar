@@ -19,7 +19,8 @@ layout: single
   to the experiment service using ROUTER/DEALER sockets.
 - **ZMQ telemetry** — Publishes non-blocking per-epoch data from a PUB socket.
 - **MariaDB** — Stores experiment lifecycle records and completed, versioned
-  results by experiment ID.
+  results by experiment ID. It also atomically assigns an incrementing seed to
+  each new experiment.
 - **Snake runner (`snake_lab`)** — Runs the headless game, NumPy Q-model, and
   bounded replay training entirely in memory with a fixed configuration.
 

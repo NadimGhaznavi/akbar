@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
@@ -139,7 +140,8 @@ class ExperimentServer:
             raise ProtocolError("an experiment is already running")
         if request.payload:
             raise ProtocolError("start_experiment does not accept configuration")
-        config = self.default_config
+        seed = await asyncio.to_thread(self.repository.allocate_seed)
+        config = replace(self.default_config, seed=seed)
         experiment_id = str(uuid4())
         config_data = config.to_dict()
         await asyncio.to_thread(self.repository.create, experiment_id, config_data)

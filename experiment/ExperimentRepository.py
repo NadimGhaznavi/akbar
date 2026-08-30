@@ -10,11 +10,13 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 from constants.DDatabase import DDatabase
+from constants.DExperiment import DExperiment
 
 
 class ExperimentRepository(Protocol):
     def initialize(self) -> None: ...
     def mark_interrupted(self) -> None: ...
+    def allocate_seed(self) -> int: ...
     def create(self, experiment_id: str, config: dict[str, Any]) -> None: ...
     def mark_running(self, experiment_id: str) -> None: ...
     def finish(
@@ -60,6 +62,44 @@ class MariaDBExperimentRepository:
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                 """
             )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS experiment_seed_sequence (
+                    sequence_name VARCHAR(32) PRIMARY KEY,
+                    next_seed BIGINT UNSIGNED NOT NULL
+                ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                """
+            )
+            cursor.execute(
+                """
+                INSERT IGNORE INTO experiment_seed_sequence
+                    (sequence_name, next_seed)
+                VALUES ('default', %s)
+                """,
+                (DExperiment.DEFAULT_SEED,),
+            )
+            cursor.execute(
+                """
+                SELECT MAX(
+                    CAST(
+                        JSON_UNQUOTE(JSON_EXTRACT(config_json, '$.seed'))
+                        AS UNSIGNED
+                    )
+                ) AS maximum_seed
+                FROM experiments
+                WHERE JSON_EXTRACT(config_json, '$.seed') IS NOT NULL
+                """
+            )
+            row = cursor.fetchone()
+            if row["maximum_seed"] is not None:
+                cursor.execute(
+                    """
+                    UPDATE experiment_seed_sequence
+                    SET next_seed = GREATEST(next_seed, %s)
+                    WHERE sequence_name = 'default'
+                    """,
+                    (int(row["maximum_seed"]) + 1,),
+                )
 
     def mark_interrupted(self) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
@@ -71,6 +111,35 @@ class MariaDBExperimentRepository:
                 WHERE status IN ('queued', 'running')
                 """
             )
+
+    def allocate_seed(self) -> int:
+        with self._connect() as connection, connection.cursor() as cursor:
+            connection.begin()
+            try:
+                cursor.execute(
+                    """
+                    SELECT next_seed
+                    FROM experiment_seed_sequence
+                    WHERE sequence_name = 'default'
+                    FOR UPDATE
+                    """
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise RuntimeError("experiment seed sequence is not initialized")
+                seed = int(row["next_seed"])
+                cursor.execute(
+                    """
+                    UPDATE experiment_seed_sequence
+                    SET next_seed = next_seed + 1
+                    WHERE sequence_name = 'default'
+                    """
+                )
+                connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+        return seed
 
     def create(self, experiment_id: str, config: dict[str, Any]) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
