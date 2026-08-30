@@ -4,22 +4,20 @@ author_profile: true
 layout: single
 ---
 
-![Akbar](/pages/images/akbar.png)
+![Akbar]({{ '/pages/images/akbar.png' | relative_url }})
 
 # Akbar
 
-This project is about using a locally hosted LLM as the backend to an AI Agent.
-
-The agent is Akbar.
+Akbar is an AI agent backed by a locally hosted large language model. The goal is
+to run a capable model on modest, readily available GPU hardware.
 
 ---
 
 
-# Links
+## Setup guides
 
-- Akbar's underlying LLM uses the [Qwen 3-4B](https://qwen.readthedocs.io/en/latest/) model
-- [GPU Driver Setup](/pages/driver-setup.html)
-- [Model Setup](/pages/model-setup.html)
-- [Interactive CLI](/pages/interactive-cli.html)
-
+- Akbar uses the [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B) model.
+- [GPU driver and llama.cpp setup]({{ '/pages/driver-setup.html' | relative_url }})
+- [Model setup]({{ '/pages/model-setup.html' | relative_url }})
+- [Interactive CLI]({{ '/pages/interactive-cli.html' | relative_url }})
 

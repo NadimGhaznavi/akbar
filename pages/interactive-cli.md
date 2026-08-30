@@ -4,9 +4,9 @@ author_profile: true
 layout: single
 ---
 
-![Akbar](/pages/images/akbar.png)
+![Akbar]({{ '/pages/images/akbar.png' | relative_url }})
 
-# Run It
+## Run Akbar
 
 ```sh
 cd /opt/dev/llama.cpp
@@ -14,8 +14,5 @@ cd /opt/dev/llama.cpp
     -m /opt/dev/models/quantized/Qwen3.5-4B-Q4_K_M.gguf \
     -ngl 99 \
     -c 4096 \
-    --reasoning-budget 10 
+    --reasoning-budget 10
 ```
-
-
-

@@ -4,23 +4,24 @@ author_profile: true
 layout: single
 ---
 
-![Akbar](/pages/images/akbar.png)
+![Akbar]({{ '/pages/images/akbar.png' | relative_url }})
 
-# Intro
+## Introduction
 
-The page documents the process of installing the Nvudua driver.
+This page documents how to install the NVIDIA driver and CUDA toolkit on Debian
+Trixie, then build llama.cpp with CUDA support.
 
-# Check that the GPU Hardware is Detected
+## Check that the GPU is detected
 
 ```sh
 # lspci | grep -i nvidia
 02:00.0 VGA compatible controller: NVIDIA Corporation GM204GL [Quadro M4000] (rev a1)
 ```
 
-# Ensure Non-Free Software Repos and Contrib Repos are Enabled
+## Enable the contrib and non-free repositories
 
 ```sh
-root@wintermute:/opt/prod/xmrig # cat /etc/apt/sources.list
+# cat /etc/apt/sources.list
 deb http://deb.debian.org/debian/ trixie main contrib non-free non-free-firmware
 deb-src http://deb.debian.org/debian/ trixie main contrib non-free non-free-firmware
 
@@ -31,33 +32,33 @@ deb http://deb.debian.org/debian/ trixie-updates main contrib non-free non-free-
 deb-src http://deb.debian.org/debian/ trixie-updates main contrib non-free non-free-firmware
 ```
 
-# Install Build Tools
+## Install the build tools
 
-To bu8ild the Nvidia kernel version...
-
-```sh
-apt install build-essential linux-headers-amd64 cmake libssl-dev python3.13-venv git-lfs python3-dev
-```
-
-# Install NVidia Driver
+Install the packages needed for the NVIDIA kernel module, CUDA, and llama.cpp:
 
 ```sh
 apt update
+apt install build-essential linux-headers-amd64 cmake libssl-dev python3.13-venv git-lfs python3-dev
+```
+
+## Install the NVIDIA driver
+
+```sh
 apt install nvidia-driver
 ```
 
 You will likely have to reboot because of a kernel module conflict.
 
-# Install the CUDA Toolkit
+## Install the CUDA toolkit
 
 ```sh
 apt install nvidia-cuda-dev nvidia-cuda-toolkit
 ```
 
-# Confirm Driver 
+## Confirm the driver
 
 ```sh
-# nvidia-smi 
+# nvidia-smi
 Sat Aug 29 15:53:59 2026       
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 550.163.01             Driver Version: 550.163.01     CUDA Version: 12.4     |
@@ -80,7 +81,7 @@ Sat Aug 29 15:53:59 2026
 +-----------------------------------------------------------------------------------------+
 ```
 
-# Confirm Toolkit
+## Confirm the toolkit
 
 ```sh
 # nvcc --version
@@ -91,13 +92,13 @@ Cuda compilation tools, release 12.4, V12.4.131
 Build cuda_12.4.r12.4/compiler.34097967_0
 ```
 
-# Download QWen
+## Download llama.cpp
 
 ```sh
 git clone https://github.com/ggml-org/llama.cpp
 ```
 
-# Build QWen
+## Build llama.cpp with CUDA support
 
 ```sh
 cd llama.cpp
