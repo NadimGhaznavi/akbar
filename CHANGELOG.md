@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Limited scheduled investigation to three capped model responses before the
+  worker performs its own authoritative status check and starts one experiment
+  when idle, preventing model deliberation from monopolizing the scheduler.
+
+---
+
 ## [0.10.5] - 2026-08-30 @ 06:04
 
 ### Changed

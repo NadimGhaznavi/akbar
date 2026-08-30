@@ -60,6 +60,7 @@ class LlamaChatClient:
                 "messages": messages,
                 "tools": tools,
                 "tool_choice": "auto",
+                "max_tokens": DAgent.MAX_COMPLETION_TOKENS,
                 "stream": False,
             },
         )
@@ -167,6 +168,12 @@ class AkbarAgent:
         experiment_resolved = False
 
         for _round in range(self.max_tool_rounds + 1):
+            if (
+                require_experiment_resolution
+                and not experiment_resolved
+                and _round >= DAgent.SCHEDULED_INVESTIGATION_ROUNDS
+            ):
+                return await self._force_experiment_resolution(allowed_tools)
             response = await self.chat.complete(messages, tool_definitions)
             message = self._assistant_message(response)
             messages.append(message)
@@ -229,6 +236,37 @@ class AkbarAgent:
                 )
 
         raise AgentError("model did not produce a final response")
+
+    async def _force_experiment_resolution(self, allowed_tools: set[str]) -> str:
+        required_tools = {"get_experiment_status", "start_experiment"}
+        missing_tools = required_tools - allowed_tools
+        if missing_tools:
+            raise AgentError(
+                "scheduled experiment enforcement requires tools: "
+                + ", ".join(sorted(missing_tools))
+            )
+
+        LOGGER.warning(
+            "scheduled investigation budget exhausted; enforcing experiment "
+            "resolution"
+        )
+        LOGGER.info("calling MCP tool get_experiment_status")
+        status_result = await self.tools.call_tool("get_experiment_status", {})
+        if not self._tool_succeeded(status_result):
+            raise AgentError("could not verify experiment status during enforcement")
+        status = self._find_status(status_result)
+        if status in {"queued", "running"}:
+            return f"Scheduled turn confirmed an active {status} experiment."
+        if status not in {"ready", "completed", "cancelled", "failed"}:
+            raise AgentError(
+                f"scheduled enforcement received unknown experiment status: {status}"
+            )
+
+        LOGGER.info("calling MCP tool start_experiment")
+        start_result = await self.tools.call_tool("start_experiment", {})
+        if not self._tool_succeeded(start_result):
+            raise AgentError("could not start an experiment during enforcement")
+        return "Scheduled investigation budget expired; started one experiment."
 
     @staticmethod
     def _tool_succeeded(result: Any) -> bool:
