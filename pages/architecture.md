@@ -22,7 +22,8 @@ layout: single
   results by experiment ID. It also atomically assigns an incrementing seed to
   each new experiment.
 - **Snake runner (`snake_lab`)** — Runs the headless game, NumPy Q-model, and
-  bounded replay training entirely in memory with a fixed configuration.
+  bounded replay training entirely in memory with a persisted, bounded
+  configuration.
 
 ## Boundaries
 
@@ -30,3 +31,6 @@ MariaDB is accessed only at lifecycle boundaries and for explicit historical
 queries—never within or between simulation epochs. Live state, model weights,
 replay memory, and telemetry remain in memory. No checkpoints, snapshots, CSV
 files, or per-epoch logs are written to disk.
+
+See the [Experiment Life Cycle]({{ '/pages/elc.html' | relative_url }}) for run
+states, deliverables, and launch-safety rules.
