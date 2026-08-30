@@ -69,6 +69,12 @@ def get_experiment_result(experiment_id: str) -> dict:
 
 
 @mcp.tool()
+def get_experiment_count() -> dict[str, int]:
+    """Return the number of experiments recorded in MariaDB."""
+    return ExperimentClient().request(MessageType.GET_EXPERIMENT_COUNT)
+
+
+@mcp.tool()
 def get_current_highscore(experiment_id: str = "") -> dict:
     """Return the current in-memory highscore without querying MariaDB."""
     return ExperimentClient().request(
