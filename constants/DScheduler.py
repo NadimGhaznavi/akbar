@@ -4,8 +4,8 @@ from constants.DAkbar import DAkbar
 
 
 class DScheduler:
-    INITIAL_DELAY_SECONDS: Final[int] = 15
-    INTERVAL_SECONDS: Final[int] = 2
+    INITIAL_DELAY_SECONDS: Final[int] = 3
+    INTERVAL_SECONDS: Final[int] = 3
     RESULT_HISTORY_LIMIT: Final[int] = 100
     CHAT_COMPLETIONS_URL: Final[str] = (
         f"http://127.0.0.1:{DAkbar.PORT}/v1/chat/completions"
