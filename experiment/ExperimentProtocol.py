@@ -28,6 +28,8 @@ class MessageType(StrEnum):
     EXPERIMENT_CONFIG = "experiment_config"
     SET_EXPERIMENT_CONFIG = "set_experiment_config"
     EXPERIMENT_CONFIG_UPDATED = "experiment_config_updated"
+    LIST_EXPERIMENT_RESULTS = "list_experiment_results"
+    EXPERIMENT_RESULTS = "experiment_results"
     GET_CURRENT_HIGHSCORE = "get_current_highscore"
     CURRENT_HIGHSCORE = "current_highscore"
     STOP_EXPERIMENT = "stop_experiment"

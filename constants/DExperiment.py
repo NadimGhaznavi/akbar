@@ -16,6 +16,8 @@ class DExperiment:
     MAX_EPOCHS: Final[int] = 100_000
     MIN_LEARNING_RATE: Final[float] = 0.000_001
     MAX_LEARNING_RATE: Final[float] = 0.1
+    DEFAULT_RESULT_LIST_LIMIT: Final[int] = 10
+    MAX_RESULT_LIST_LIMIT: Final[int] = 100
 
     CONTROL_ENDPOINT: Final[str] = f"tcp://{CONTROL_HOST}:{CONTROL_PORT}"
     TELEMETRY_ENDPOINT: Final[str] = f"tcp://{TELEMETRY_HOST}:{TELEMETRY_PORT}"

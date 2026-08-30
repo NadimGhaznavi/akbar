@@ -75,6 +75,10 @@ experiment ID. It contains:
 Failed, cancelled, and interrupted experiments store their terminal status and
 error or stop reason, but do not manufacture a completed result.
 
+Recent completed runs can be discovered through bounded result summaries. A
+summary identifies the run and its key configuration and score metrics; the full
+result is retrieved separately by experiment ID.
+
 ## Acknowledgement interlock
 
 A terminal experiment must be explicitly acknowledged before the service

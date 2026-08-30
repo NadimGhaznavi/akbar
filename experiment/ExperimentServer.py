@@ -154,6 +154,8 @@ class ExperimentServer:
             )
         if request.message_type is MessageType.SET_EXPERIMENT_CONFIG:
             return await self._set_config(request)
+        if request.message_type is MessageType.LIST_EXPERIMENT_RESULTS:
+            return await self._list_results(request)
         if request.message_type is MessageType.GET_CURRENT_HIGHSCORE:
             return self._highscore(request)
         if request.message_type is MessageType.STOP_EXPERIMENT:
@@ -218,6 +220,27 @@ class ExperimentServer:
                 },
             },
         }
+
+    async def _list_results(
+        self,
+        request: ExperimentMessage,
+    ) -> ExperimentMessage:
+        limit = request.payload.get(
+            "limit",
+            DExperiment.DEFAULT_RESULT_LIST_LIMIT,
+        )
+        if isinstance(limit, bool) or not isinstance(limit, int):
+            raise ProtocolError("result list limit must be an integer")
+        if not 1 <= limit <= DExperiment.MAX_RESULT_LIST_LIMIT:
+            raise ProtocolError(
+                "result list limit must be between 1 and "
+                f"{DExperiment.MAX_RESULT_LIST_LIMIT}"
+            )
+        results = await asyncio.to_thread(self.repository.list_results, limit)
+        return request.reply(
+            MessageType.EXPERIMENT_RESULTS,
+            {"results": results, "returned": len(results)},
+        )
 
     async def _run_experiment(
         self, experiment_id: str, config: ExperimentConfig
