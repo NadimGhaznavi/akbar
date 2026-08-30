@@ -1,11 +1,24 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from io import StringIO
+from pathlib import Path
 
 from constants.DAkbar import DAkbar
 from experiment.ExperimentProtocol import MessageType
-from tools.cli import AkbarCLI, safe_for_display, short_id
+
+
+CLI_PATH = Path(__file__).resolve().parent.parent / "scripts" / "akbar-cli.py"
+CLI_SPEC = importlib.util.spec_from_file_location("akbar_cli", CLI_PATH)
+if CLI_SPEC is None or CLI_SPEC.loader is None:
+    raise RuntimeError(f"unable to load CLI module: {CLI_PATH}")
+CLI_MODULE = importlib.util.module_from_spec(CLI_SPEC)
+CLI_SPEC.loader.exec_module(CLI_MODULE)
+
+AkbarCLI = CLI_MODULE.AkbarCLI
+safe_for_display = CLI_MODULE.safe_for_display
+short_id = CLI_MODULE.short_id
 
 EXPERIMENT_ID = "12345678-1234-1234-1234-12345678a9f0"
 

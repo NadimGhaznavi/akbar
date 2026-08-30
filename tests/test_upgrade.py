@@ -4,10 +4,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.install import APPLICATION_FILES
 from scripts.upgrade import remove_installed_runtime
 
 
 class UpgradeBoundaryTest(unittest.TestCase):
+    def test_operational_scripts_are_in_the_install_manifest(self) -> None:
+        destinations = {destination for _, destination in APPLICATION_FILES}
+        self.assertIn(Path("scripts/akbar-cli.py"), destinations)
+        self.assertIn(Path("scripts/install.py"), destinations)
+        self.assertIn(Path("scripts/upgrade.py"), destinations)
+
     def test_runtime_replacement_preserves_environment_and_unowned_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             install_root = Path(directory)
