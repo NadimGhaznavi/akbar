@@ -141,20 +141,16 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(len(http.requests), 1)
         request = http.requests[0][1]
         self.assertEqual(request["response_format"]["type"], "json_schema")
+        self.assertEqual(request["reasoning_budget"], 0)
         self.assertIn("previous_experiments", request["messages"][1]["content"])
 
-    def test_planner_accepts_fenced_json_from_llama(self) -> None:
-        http = FakeHTTPClient(
-            """```json
-{"epochs":50,"learning_rate":0.0008,"rationale":"Try a lower rate."}
-```"""
-        )
+    def test_planner_rejects_empty_final_content(self) -> None:
+        http = FakeHTTPClient("")
         planner = LlamaPlanner(client=http)
         config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
 
-        proposal = asyncio.run(planner.propose(config, []))
-
-        self.assertEqual(proposal.rationale, "Try a lower rate.")
+        with self.assertRaisesRegex(PlanningError, "invalid proposal JSON"):
+            asyncio.run(planner.propose(config, []))
 
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
         experiment = FakeExperimentControl()
