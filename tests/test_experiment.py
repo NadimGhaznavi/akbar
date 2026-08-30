@@ -75,6 +75,27 @@ class MemoryRepository:
             if experiment_id.endswith(suffix)
         ][:2]
 
+    def list_results(self, limit: int) -> list[dict[str, Any]]:
+        summaries = []
+        for record in reversed(self.records.values()):
+            if record["status"] != "completed" or record["result"] is None:
+                continue
+            metrics = record["result"]["metrics"]
+            summaries.append(
+                {
+                    "experiment_id": record["experiment_id"],
+                    "seed": record["config"]["seed"],
+                    "epochs": record["config"]["epochs"],
+                    "learning_rate": record["config"]["learning_rate"],
+                    "highscore": metrics["highscore"],
+                    "average_score": metrics["average_score"],
+                    "completed_at": None,
+                }
+            )
+            if len(summaries) == limit:
+                break
+        return summaries
+
 
 def unused_tcp_endpoint() -> str:
     with socket.socket() as candidate:
@@ -270,6 +291,31 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
                     MessageType.SET_EXPERIMENT_CONFIG,
                     payload=payload,
                 )
+
+    async def test_list_previous_completed_results(self) -> None:
+        accepted = await self.request(MessageType.START_EXPERIMENT)
+        experiment_id = accepted["experiment_id"]
+        for _ in range(100):
+            status = await self.request(
+                MessageType.GET_EXPERIMENT_STATUS,
+                experiment_id=experiment_id,
+            )
+            if status["status"] == "completed":
+                break
+            await asyncio.sleep(0.01)
+        listed = await self.request(
+            MessageType.LIST_EXPERIMENT_RESULTS,
+            payload={"limit": 10},
+        )
+        self.assertEqual(listed["returned"], 1)
+        self.assertEqual(listed["results"][0]["experiment_id"], experiment_id)
+        self.assertEqual(listed["results"][0]["seed"], 1970)
+
+        with self.assertRaises(ExperimentClientError):
+            await self.request(
+                MessageType.LIST_EXPERIMENT_RESULTS,
+                payload={"limit": 101},
+            )
 
 
 if __name__ == "__main__":

@@ -66,7 +66,20 @@ def doc_03_run_experiment() -> str:
         "Call start_experiment once and retain the returned experiment ID. "
         "Do not issue another start while an experiment is queued or running. "
         "Use get_experiment_status to monitor it. After its status becomes "
-        "completed, use get_experiment_result to retrieve the persisted result."
+        "completed, use get_experiment_result to retrieve the persisted result. "
+        "Use list_experiment_results to discover recent completed runs."
+    )
+
+
+@mcp.tool()
+def doc_04_review_results() -> str:
+    """Return a short description of how to review previous results."""
+    return (
+        "Call list_experiment_results to retrieve compact summaries of recent "
+        "completed experiments. The optional limit defaults to 10 and must be "
+        "between 1 and 100. Compare the configuration and score metrics in the "
+        "summaries, then pass an experiment ID to get_experiment_result when "
+        "you need that run's full persisted result."
     )
 
 
@@ -124,6 +137,15 @@ def get_experiment_result(experiment_id: str) -> dict:
     return ExperimentClient().request(
         MessageType.GET_EXPERIMENT_RESULT,
         experiment_id=experiment_id,
+    )
+
+
+@mcp.tool()
+def list_experiment_results(limit: int = 10) -> dict:
+    """List summaries of the most recent completed experiment results."""
+    return ExperimentClient().request(
+        MessageType.LIST_EXPERIMENT_RESULTS,
+        {"limit": limit},
     )
 
 
