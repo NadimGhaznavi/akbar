@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Experiment Life Cycle specification covering states, persistence boundaries,
+  result deliverables, invariants, and the planned acknowledgement interlock.
+
+---
+
 ## [0.7.1] - 2026-08-30 @ 02:52
 
 ### Changed
