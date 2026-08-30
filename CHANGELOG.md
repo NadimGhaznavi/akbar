@@ -24,8 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Split the monolithic MCP tool file into project, documentation, experiment,
   and server modules with a package-based launch entry point.
-- Made llama.cpp inference-only and moved MCP orchestration into the independent
-  agent worker.
+- Moved scheduled MCP orchestration into the independent agent worker while
+  retaining llama-server MCP access for interactive web chat.
 - Centralized MariaDB connection construction for experiment persistence and
   durable process coordination.
 - Encoded an evidence-driven scheduled workflow that checks active work,
@@ -37,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - The installed top-level `tools.py` compatibility entry point.
-- The obsolete llama.cpp MCP configuration file and server flag.
 
 ---
 

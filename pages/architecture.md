@@ -12,8 +12,9 @@ lifecycle or relies on shared in-memory orchestration state.
 
 ## Services
 
-- **`akbar.service`** runs inference-only `llama-server`. It accepts
-  OpenAI-compatible chat-completion requests and does not execute tools.
+- **`akbar.service`** runs `llama-server` for interactive web chat and
+  OpenAI-compatible inference. Its MCP configuration gives web-chat turns
+  access to the same Akbar tool package.
 - **`akbar-agentd.service`** polls MariaDB for queued agent turns. It claims one
   turn, runs the bounded model/function-calling loop, and persists the outcome.
 - **`akbar-scheduler.service`** periodically attempts to enqueue a continuation
@@ -26,8 +27,8 @@ lifecycle or relies on shared in-memory orchestration state.
 - **MariaDB** is the durable coordination boundary. It stores agent turns,
   experiment configuration, lifecycle records, results, and the seed sequence.
 - **MCP tool package (`tools`)** exposes project information, operating
-  guidance, and experiment controls. The agent worker discovers its schemas and
-  invokes it over stdio.
+  guidance, and experiment controls. Both llama-server's interactive chat path
+  and the agent worker launch it over stdio.
 - **ZMQ control plane** carries versioned requests from MCP tools and the
   administrative CLI to the experiment service.
 - **ZMQ telemetry** publishes non-blocking per-epoch updates from the experiment
@@ -86,8 +87,8 @@ model output or exhausted limits fail the durable turn.
 - Scheduler and agent polling is bounded and occurs outside simulation work.
 - MariaDB is accessed at experiment lifecycle boundaries and for explicit
   historical queries, never within or between simulation epochs.
-- The model service performs inference only; the agent worker owns tool
-  orchestration.
+- Interactive web chat uses llama-server's MCP integration. Durable scheduled
+  turns use the independently bounded agent-worker function-calling loop.
 - The scheduler and agent worker communicate only through MariaDB.
 - No checkpoints, snapshots, CSV files, or per-epoch logs are written to disk.
 

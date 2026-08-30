@@ -16,7 +16,11 @@ class AkbarServerCommandTest(unittest.TestCase):
             command[reasoning_index + 1],
             str(DAkbar.REASONING_BUDGET),
         )
-        self.assertNotIn("--mcp-servers-config", command)
+        mcp_index = command.index("--mcp-servers-config")
+        self.assertEqual(
+            command[mcp_index + 1],
+            str(DAkbar.MCP_SERVERS_CONFIG),
+        )
 
 
 if __name__ == "__main__":
