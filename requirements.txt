@@ -1,4 +1,5 @@
 # MCP Python SDK. Akbar uses the v2 MCPServer API.
 mcp>=2,<3
+numpy>=2,<3
 PyMySQL>=1.1,<2
 pyzmq>=26,<28

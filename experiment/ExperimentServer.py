@@ -178,6 +178,9 @@ class ExperimentServer:
                     "epochs_completed": runner_result["epochs"],
                     "highscore": runner_result["highscore"],
                     "average_score": runner_result["average_score"],
+                    "average_loss": runner_result["average_loss"],
+                    "total_moves": runner_result["total_moves"],
+                    "replay_size": runner_result["replay_size"],
                 },
                 "timing": {
                     "started_at": state.started_at,
