@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-30 @ 01:55
+
 ## [0.5.1] - 2026-08-30 @ 01:48
 
 ---
@@ -18,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Moved MariaDB settings into a dedicated database constants class.
+- Made installation, reinstallation, and uninstallation explicitly destructive:
+  existing application files, services, credentials, and MariaDB data are
+  removed rather than preserved.
 - Replaced the experiment-service stub with an end-to-end, versioned ZMQ control
   plane and a deterministic first experiment runner.
 - Limited experiment starts to the service-owned fixed default configuration;

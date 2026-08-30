@@ -24,7 +24,12 @@ From the root of the Akbar source checkout, run:
 sudo python3 scripts/install.py
 ```
 
-The installer performs the following operations:
+Installation is destructive. Before creating the new deployment, it stops and
+removes the existing services, installation tree, service account, MariaDB
+database and account, and generated credentials. Existing experiment records
+cannot be recovered unless they were backed up separately.
+
+The installer then performs the following operations:
 
 1. Creates the `akbar` system user and group when they do not exist.
 2. Copies the Akbar runtime into `/opt/akbar`.
@@ -76,7 +81,7 @@ It is owned by `root:akbar` with mode `0640`. The systemd unit loads it as an
 environment file, so credentials are not stored in the source tree or embedded
 in application code.
 
-Reinstalling Akbar preserves and reuses the existing database password.
+Every install generates a new database password.
 
 ## Update Akbar
 
@@ -86,27 +91,17 @@ Run the reinstall command from the updated source checkout:
 sudo python3 scripts/reinstall.py
 ```
 
-This replaces the installed application code, updates dependencies, reinstalls
-the systemd unit, and restarts the service. It does not change whether the
-service is enabled at boot, and it does not replace the database.
+This invokes the same destructive installation path, then starts the recreated
+services. It deletes the existing database, experiments, credentials, virtual
+environment, application files, and service enablement state.
 
 ## Uninstall Akbar
 
-To stop Akbar and remove its application files, systemd unit, and operating
-system account, run:
+To stop Akbar and permanently remove its application files, systemd units,
+operating-system account, MariaDB database and account, and credentials, run:
 
 ```sh
 sudo python3 scripts/uninstall.py
-```
-
-The database and credentials are deliberately retained so experimental data is
-not destroyed by an ordinary software removal.
-
-To permanently delete the database, database account, and credentials as well,
-use the explicit purge option:
-
-```sh
-sudo python3 scripts/uninstall.py --purge-data
 ```
 
 This operation is destructive and the removed database cannot be recovered
@@ -123,3 +118,5 @@ python3 scripts/install.py \
     --no-service \
     --skip-dependencies
 ```
+
+The alternate prefix is erased before the test installation is created.

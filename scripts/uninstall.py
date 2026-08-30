@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Remove Akbar, its systemd unit, and its service account."""
+"""Destructively remove Akbar and all Akbar-owned data."""
 
 from __future__ import annotations
 
-import argparse
 import grp
 import os
 from pathlib import Path
@@ -23,23 +22,15 @@ from constants.DDatabase import DDatabase  # noqa: E402
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Remove Akbar, its systemd unit, and its service account."
-    )
-    parser.add_argument(
-        "--purge-data",
-        action="store_true",
-        help="also remove the MariaDB database, database user, and credentials",
-    )
-    return parser.parse_args()
-
-
 def run(*command: str | Path, check: bool = True) -> None:
     subprocess.run([str(part) for part in command], check=check)
 
 
 def purge_database() -> None:
+    if DAkbar.CONFIG_DIRECTORY.is_symlink():
+        raise ValueError(
+            f"refusing symlinked config directory: {DAkbar.CONFIG_DIRECTORY}"
+        )
     mariadb = shutil.which("mariadb")
     if mariadb is None:
         raise FileNotFoundError(
@@ -56,14 +47,14 @@ DROP USER IF EXISTS '{DDatabase.USERNAME}'@'{DDatabase.HOST}';
         text=True,
         check=True,
     )
-    if DDatabase.ENV_FILE.exists():
-        DDatabase.ENV_FILE.unlink()
     if DAkbar.CONFIG_DIRECTORY.is_dir():
-        DAkbar.CONFIG_DIRECTORY.rmdir()
+        shutil.rmtree(DAkbar.CONFIG_DIRECTORY)
 
 
 def main() -> int:
-    args = parse_args()
+    if len(sys.argv) > 1:
+        print("uninstall.py: this command accepts no arguments", file=sys.stderr)
+        return 1
     if os.geteuid() != 0:
         print("uninstall.py: uninstall must be run as root", file=sys.stderr)
         return 1
@@ -85,17 +76,11 @@ def main() -> int:
     if DAkbar.INSTALL_ROOT.is_dir():
         shutil.rmtree(DAkbar.INSTALL_ROOT)
 
-    if args.purge_data:
-        try:
-            purge_database()
-        except (FileNotFoundError, OSError, subprocess.CalledProcessError) as error:
-            print(f"uninstall.py: {error}", file=sys.stderr)
-            return 1
-    elif DDatabase.ENV_FILE.is_file():
-        DDatabase.ENV_FILE.chmod(0o600)
-        shutil.chown(DDatabase.ENV_FILE, user="root", group="root")
-        DAkbar.CONFIG_DIRECTORY.chmod(0o700)
-        shutil.chown(DAkbar.CONFIG_DIRECTORY, user="root", group="root")
+    try:
+        purge_database()
+    except (FileNotFoundError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"uninstall.py: {error}", file=sys.stderr)
+        return 1
 
     try:
         pwd.getpwnam(DAkbar.SERVICE_USER)
@@ -111,11 +96,7 @@ def main() -> int:
     else:
         run("groupdel", DAkbar.SERVICE_GROUP)
 
-    print("Akbar uninstalled")
-    if not args.purge_data:
-        print(
-            "MariaDB data and credentials were retained; use --purge-data to remove them"
-        )
+    print("Akbar and all Akbar-owned data uninstalled")
     return 0
 
 
