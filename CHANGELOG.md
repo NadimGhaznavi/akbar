@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-30 @ 00:24
+
+### Added
+
+- MCP project-information tool providing Akbar's purpose, version, and
+  administrator name.
+
 ## [0.2.3] - 2026-08-30 @ 00:19
 
 ### Added
