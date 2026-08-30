@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update an existing Akbar installation and restart its service."""
+"""Destructively recreate Akbar from the current checkout."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from constants.DAkbar import DAkbar  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Replace the installed Akbar code and restart the service."
+        description="Erase and recreate Akbar, its database, and its services."
     )
     parser.add_argument(
         "--skip-dependencies",

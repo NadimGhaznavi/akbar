@@ -12,8 +12,9 @@ Install the Akbar application in `/opt/akbar`:
 sudo python3 scripts/install.py
 ```
 
-By default, the installer creates the `akbar` service account, creates a virtual
-environment, provisions an `akbar` MariaDB database and database account,
+The installer first destroys any existing Akbar deployment and data. It then
+creates the `akbar` service account, creates a virtual environment, provisions
+an `akbar` MariaDB database and database account,
 installs Python dependencies, and installs the model and experiment systemd
 units. MariaDB server and
 client must already be installed and running. It does not enable or start the
@@ -40,21 +41,17 @@ Reinstall the current checkout and restart the service:
 sudo python3 scripts/reinstall.py
 ```
 
-This replaces the installed application code, updates the virtual environment,
-reinstalls both systemd units, and leaves their existing enablement state
-unchanged.
+This is a destructive reinstall. It deletes all existing experiments, database
+credentials, installed files, and service enablement state before recreating
+Akbar and restarting its services.
 
 ## Uninstallation
 
-Stop Akbar and remove its application files, systemd units, and service account:
+Stop Akbar and permanently remove its application files, systemd units, service
+account, MariaDB database, database account, and credentials:
 
 ```sh
 sudo python3 scripts/uninstall.py
 ```
 
-Database contents and credentials are retained by default. Remove them
-explicitly when they are no longer needed:
-
-```sh
-sudo python3 scripts/uninstall.py --purge-data
-```
+Uninstallation is always destructive. Back up anything you need beforehand.
