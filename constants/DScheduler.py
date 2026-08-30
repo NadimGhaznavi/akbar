@@ -1,16 +1,31 @@
-from typing import Final
+from typing import Any, Final
+
+from constants.DAkbar import DAkbar
 
 
 class DScheduler:
     INITIAL_DELAY_SECONDS: Final[int] = 15
     INTERVAL_SECONDS: Final[int] = 15
-    PROMPT: Final[str] = (
-        "Continue the AI Snake Lab investigation. First inspect the current "
-        "experiment state. If an experiment is queued or running, report its "
-        "status and do not start another. Otherwise, review recent completed "
-        "results, compare their configurations and score metrics, and design the "
-        "next deliberate learning-rate experiment. Explain the evidence and "
-        "rationale, update the persisted configuration if appropriate, and start "
-        "exactly one experiment. In your final response, record the decision, "
-        "configuration, rationale, and resulting experiment ID."
+    RESULT_HISTORY_LIMIT: Final[int] = 10
+    CHAT_COMPLETIONS_URL: Final[str] = (
+        f"http://127.0.0.1:{DAkbar.PORT}/v1/chat/completions"
     )
+    MODEL_NAME: Final[str] = "akbar"
+    CHAT_TIMEOUT_SECONDS: Final[int] = 120
+    MAX_COMPLETION_TOKENS: Final[int] = 512
+    SYSTEM_PROMPT: Final[str] = (
+        "You design the next AI Snake Lab learning-rate experiment. Review the "
+        "provided previous experiments, compare their configurations and score "
+        "metrics, and propose one deliberate next configuration. Return only "
+        "the required JSON object. Do not call tools or manage the workflow."
+    )
+    PROPOSAL_SCHEMA: Final[dict[str, Any]] = {
+        "type": "object",
+        "properties": {
+            "epochs": {"type": "integer"},
+            "learning_rate": {"type": "number"},
+            "rationale": {"type": "string", "minLength": 1},
+        },
+        "required": ["epochs", "learning_rate", "rationale"],
+        "additionalProperties": False,
+    }

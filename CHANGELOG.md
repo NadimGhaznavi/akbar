@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- MariaDB-backed experiment planning records containing each structured
+  proposal, rationale, supporting result summaries, and launched experiment ID.
+
+### Changed
+
+- Replaced agent-managed scheduling with a deterministic thin slice that checks
+  experiment state, loads the active configuration and recent results, asks the
+  LLM once for a schema-constrained proposal, validates and persists it, and
+  starts exactly one experiment.
+
+### Removed
+
+- The autonomous agent-worker service, general-purpose function-calling loop,
+  durable agent-turn queue and tables, and their installation and systemd
+  artifacts.
+
+---
+
 ## [0.10.6] - 2026-08-30 @ 06:14
 
 ### Changed

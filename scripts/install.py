@@ -25,28 +25,23 @@ from constants.DDatabase import DDatabase  # noqa: E402
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 APPLICATION_FILES = (
     (Path("constants/__init__.py"), Path("constants/__init__.py")),
-    (Path("constants/DAgent.py"), Path("constants/DAgent.py")),
     (Path("constants/DAkbar.py"), Path("constants/DAkbar.py")),
     (Path("constants/DDatabase.py"), Path("constants/DDatabase.py")),
     (Path("constants/DExperiment.py"), Path("constants/DExperiment.py")),
     (Path("constants/DScheduler.py"), Path("constants/DScheduler.py")),
     (Path("database/__init__.py"), Path("database/__init__.py")),
     (Path("database/Database.py"), Path("database/Database.py")),
-    (Path("orchestration/__init__.py"), Path("orchestration/__init__.py")),
-    (
-        Path("orchestration/TurnRepository.py"),
-        Path("orchestration/TurnRepository.py"),
-    ),
     (Path("server/__init__.py"), Path("server/__init__.py")),
     (Path("server/AkbarServer.py"), Path("server/AkbarServer.py")),
     (Path("server/mcp.json"), Path("server/mcp.json")),
-    (Path("agent/__init__.py"), Path("agent/__init__.py")),
-    (Path("agent/AkbarAgent.py"), Path("agent/AkbarAgent.py")),
-    (Path("agent/AgentServer.py"), Path("agent/AgentServer.py")),
     (Path("scheduler/__init__.py"), Path("scheduler/__init__.py")),
     (
         Path("scheduler/SchedulerServer.py"),
         Path("scheduler/SchedulerServer.py"),
+    ),
+    (
+        Path("scheduler/PlanningRepository.py"),
+        Path("scheduler/PlanningRepository.py"),
     ),
     (Path("experiment/__init__.py"), Path("experiment/__init__.py")),
     (
@@ -118,6 +113,8 @@ APPLICATION_FILES = (
     (Path("scripts/upgrade.py"), Path("scripts/upgrade.py")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
+OBSOLETE_SERVICE_NAMES = ("akbar-agentd.service",)
+OBSOLETE_APPLICATION_PATHS = (Path("agent"), Path("orchestration"))
 
 
 def parse_args() -> argparse.Namespace:
@@ -295,7 +292,7 @@ GRANT ALL PRIVILEGES ON `{DDatabase.DB_NAME}`.*
 
 
 def destroy_services() -> None:
-    for service_name in reversed(DAkbar.SERVICE_NAMES):
+    for service_name in reversed((*DAkbar.SERVICE_NAMES, *OBSOLETE_SERVICE_NAMES)):
         run("systemctl", "disable", "--now", service_name, check=False)
         service_unit = SYSTEMD_DIRECTORY / service_name
         if service_unit.is_file() or service_unit.is_symlink():
@@ -365,6 +362,11 @@ def install_services(prefix: Path, enable: bool, start: bool) -> None:
             "systemd installation requires the production prefix; use --no-service "
             "with an alternate prefix"
         )
+
+    for service_name in OBSOLETE_SERVICE_NAMES:
+        obsolete_unit = SYSTEMD_DIRECTORY / service_name
+        if obsolete_unit.is_file() or obsolete_unit.is_symlink():
+            obsolete_unit.unlink()
 
     for service_name in DAkbar.SERVICE_NAMES:
         source = PROJECT_ROOT / "systemd" / service_name
