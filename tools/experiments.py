@@ -64,7 +64,7 @@ def get_experiment_result(experiment_id: str) -> dict:
 
 
 @mcp.tool()
-def list_experiment_results(limit: int = 10) -> dict:
+def list_experiment_results(limit: int = 100) -> dict:
     """List summaries of the most recent completed experiment results."""
     return ExperimentClient().request(
         MessageType.LIST_EXPERIMENT_RESULTS,
