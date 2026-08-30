@@ -17,6 +17,8 @@ def build_command() -> list[str]:
         str(DAkbar.MODEL),
         "--ctx-size",
         str(DAkbar.CONTEXT_SIZE),
+        "--reasoning-budget",
+        str(DAkbar.REASONING_BUDGET),
         "--host",
         DAkbar.HOST,
         "--port",

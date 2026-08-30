@@ -20,6 +20,7 @@ class DAkbar:
     )
     MCP_SERVERS_CONFIG: Final[Path] = INSTALL_ROOT / "server" / "mcp.json"
     CONTEXT_SIZE: Final[int] = 32_768
+    REASONING_BUDGET: Final[int] = 2_048
     HOST: Final[str] = "0.0.0.0"
     PORT: Final[int] = 51970
     VERSION: Final[str] = "0.8.0"
