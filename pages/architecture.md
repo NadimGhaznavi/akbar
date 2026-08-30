@@ -6,31 +6,36 @@ layout: single
 
 # Architecture
 
-Akbar is a set of independent systemd processes coordinated through durable
-MariaDB state and narrow local protocols. No process owns another process's
-lifecycle or relies on shared in-memory orchestration state.
+Akbar separates deterministic workflow management from experimental judgment.
+Python decides when and how work proceeds. The language model reviews evidence
+and proposes what experiment to run next.
+
+Independent systemd services coordinate through durable MariaDB state and
+narrow local APIs. No service supervises another service or relies on shared
+in-memory orchestration state.
 
 ## Services
 
 - **`akbar.service`** runs `llama-server` for interactive web chat and
-  OpenAI-compatible inference. Its MCP configuration gives web-chat turns
-  access to the same Akbar tool package.
-- **`akbar-agentd.service`** polls MariaDB for queued agent turns. It claims one
-  turn, runs the bounded model/function-calling loop, and persists the outcome.
-- **`akbar-scheduler.service`** periodically attempts to enqueue a continuation
-  prompt. It does not invoke, monitor, or restart the agent worker.
+  OpenAI-compatible inference. The scheduler uses its inference API, while MCP
+  configuration gives interactive web-chat turns access to Akbar's tools.
+- **`akbar-scheduler.service`** owns the experiment workflow. It checks whether
+  work is active, loads previous results, requests one structured proposal from
+  the language model, validates and persists the decision, and starts exactly
+  one experiment.
 - **`akbar-experimentd.service`** owns experiment execution and live telemetry.
-  It accepts at most one active experiment.
+  It accepts at most one active experiment and runs it entirely in memory.
+
+There is no autonomous agent-worker service or general-purpose agent-turn
+queue in the scheduled path.
 
 ## Supporting components
 
-- **MariaDB** is the durable coordination boundary. It stores agent turns,
-  experiment configuration, lifecycle records, results, and the seed sequence.
-- **MCP tool package (`tools`)** exposes project information, operating
-  guidance, and experiment controls. Both llama-server's interactive chat path
-  and the agent worker launch it over stdio.
-- **ZMQ control plane** carries versioned requests from MCP tools and the
-  administrative CLI to the experiment service.
+- **MariaDB** stores experiment configuration, planning decisions, lifecycle
+  records, results, and the seed sequence.
+- **MCP tool package (`tools`)** supports interactive web chat and project
+  inspection. It is not responsible for scheduled workflow execution.
+- **ZMQ control plane** carries versioned experiment requests and replies.
 - **ZMQ telemetry** publishes non-blocking per-epoch updates from the experiment
   service.
 - **Snake runner (`snake_lab`)** keeps the game, model, replay memory, and
@@ -38,45 +43,82 @@ lifecycle or relies on shared in-memory orchestration state.
 - **Administrative CLI (`scripts/akbar-cli.py`)** queries the authoritative
   experiment control plane without involving the language model.
 
-## Scheduled agent turn
+## Scheduled workflow
 
 ```text
-Scheduler ── enqueue ──> MariaDB <── poll/claim ── Agent worker
-                                                   │
-                                         run bounded agent loop
-                                                   │
-                                        persist outcome to MariaDB
+wait for scheduler tick
+        │
+        ▼
+check authoritative experiment state
+        │
+        ├── queued/running ──> wait for next tick
+        │
+        └── idle/terminal
+                │
+                ▼
+load active config and bounded previous results
+                │
+                ▼
+ask LLM to review old experiments and propose next config
+                │
+                ▼
+parse and validate one structured proposal
+                │
+                ▼
+persist config, rationale, and evidence references
+                │
+                ▼
+start exactly one experiment through ZMQ
+                │
+                └──> wait for next tick
 ```
 
-A transactional database gate permits at most one `queued` or `running` agent
-turn. A scheduler tick is skipped when active work already exists. The worker
-records the prompt, source, response or error, timestamps, and final status. A
-turn left running by a worker restart becomes `interrupted`.
+Workflow steps are ordinary Python operations. The language model does not
+decide whether to wait, retrieve data through repeated tool calls, or invoke the
+experiment service.
 
-## Function-calling loop
+## Planning contract
 
-```text
-Agent worker ── discover schemas ──> MCP tools
-     │
-     ├── messages + schemas ───────> llama.cpp
-     │                                  │
-     │<──────────── tool calls ─────────┘
-     ├── validate and execute ─────> MCP tools ──> ZMQ ──> Experiment service
-     ├── append tool results
-     └── repeat until final text or a configured limit
+The scheduler gives the language model:
+
+- The active configuration and its enforced limits.
+- A bounded set of previous completed experiments.
+- Each run's configuration, seed, score metrics, and completion time.
+- An instruction to compare the old experiments and design the next deliberate
+  experiment.
+
+The language model returns one schema-constrained proposal:
+
+```json
+{
+  "epochs": 50,
+  "learning_rate": 0.0008,
+  "rationale": "The previous results justify testing a smaller learning rate."
+}
 ```
 
-The worker accepts only discovered tool names and JSON-object arguments. It
-bounds both tool-call rounds and total calls, and gives the complete agent turn
-a deadline. Tool failures are returned to the model through MCP results; invalid
-model output or exhausted limits fail the durable turn.
+Python rejects malformed or out-of-range proposals. A rejected proposal does
+not start an experiment and may be retried on a later tick. A valid proposal is
+persisted before its experiment is launched.
+
+## Experiment execution
+
+The experiment service allocates the next durable seed, snapshots the selected
+configuration, creates the lifecycle record, and starts the runner. The runner
+keeps its model and training state in memory. A typical 50-epoch experiment
+takes less than one second; language-model planning is expected to dominate the
+wall-clock cycle.
+
+The service publishes transient epoch telemetry over ZMQ and persists the final
+result at the terminal lifecycle boundary.
 
 ## State ownership
 
 | State | Authority | Lifetime |
 |---|---|---|
-| Agent turn queue and outcomes | MariaDB | Durable |
-| Experiment configuration and results | MariaDB | Durable |
+| Active configuration | MariaDB | Durable |
+| Planning proposal and rationale | MariaDB | Durable |
+| Experiment lifecycle and results | MariaDB | Durable |
 | Experiment seed sequence | MariaDB | Durable |
 | Active experiment and current metrics | Experiment service | Process lifetime |
 | Snake model and replay memory | Snake runner | One experiment |
@@ -84,12 +126,15 @@ model output or exhausted limits fail the durable turn.
 
 ## Boundaries
 
-- Scheduler and agent polling is bounded and occurs outside simulation work.
+- Scheduler polling and planning occur outside simulation work.
 - MariaDB is accessed at experiment lifecycle boundaries and for explicit
   historical queries, never within or between simulation epochs.
-- Interactive web chat uses llama-server's MCP integration. Durable scheduled
-  turns use the independently bounded agent-worker function-calling loop.
-- The scheduler and agent worker communicate only through MariaDB.
+- At most one experiment may be queued or running.
+- One valid planning proposal launches exactly one experiment.
+- Interactive chat and scheduled planning share the inference server but have
+  independent workflows.
+- Interactive MCP tool use cannot become an implicit scheduled-workflow
+  dependency.
 - No checkpoints, snapshots, CSV files, or per-epoch logs are written to disk.
 
 See the [Experiment Life Cycle]({{ '/pages/elc.html' | relative_url }}) for run

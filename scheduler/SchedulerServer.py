@@ -1,29 +1,155 @@
 #!/usr/bin/env python3
-"""Periodically enqueue durable Akbar agent turns in MariaDB."""
+"""Run Akbar's deterministic experiment-planning workflow."""
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import signal
+from dataclasses import asdict, dataclass
+from typing import Any, Protocol
 
+import httpx
 from pymysql.err import MySQLError
 
 from constants.DScheduler import DScheduler
-from orchestration.TurnRepository import MariaDBTurnRepository, TurnRepository
+from experiment.ExperimentClient import ExperimentClient, ExperimentClientError
+from experiment.ExperimentProtocol import MessageType
+from scheduler.PlanningRepository import MariaDBPlanningRepository, PlanningRepository
 
 LOGGER = logging.getLogger("akbar.scheduler")
 
 
+class PlanningError(RuntimeError):
+    """The inference service returned an unusable experiment proposal."""
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentProposal:
+    epochs: int
+    learning_rate: float
+    rationale: str
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: dict[str, Any],
+        config: dict[str, Any],
+    ) -> ExperimentProposal:
+        if set(data) != {"epochs", "learning_rate", "rationale"}:
+            raise PlanningError(
+                "proposal must contain only epochs, learning_rate, and rationale"
+            )
+        epochs = data["epochs"]
+        learning_rate = data["learning_rate"]
+        rationale = data["rationale"]
+        if isinstance(epochs, bool) or not isinstance(epochs, int):
+            raise PlanningError("proposal epochs must be an integer")
+        if isinstance(learning_rate, bool) or not isinstance(
+            learning_rate, (int, float)
+        ):
+            raise PlanningError("proposal learning_rate must be a number")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise PlanningError("proposal rationale must be non-empty text")
+        limits = config["limits"]
+        epoch_limits = limits["epochs"]
+        rate_limits = limits["learning_rate"]
+        if not epoch_limits["minimum"] <= epochs <= epoch_limits["maximum"]:
+            raise PlanningError("proposal epochs are outside the configured limits")
+        if not (
+            rate_limits["minimum"] <= float(learning_rate) <= rate_limits["maximum"]
+        ):
+            raise PlanningError(
+                "proposal learning_rate is outside the configured limits"
+            )
+        return cls(epochs, float(learning_rate), rationale.strip())
+
+
+class Planner(Protocol):
+    async def propose(
+        self,
+        config: dict[str, Any],
+        results: list[dict[str, Any]],
+    ) -> ExperimentProposal: ...
+
+
+class ExperimentControl(Protocol):
+    def request(
+        self,
+        message_type: MessageType,
+        payload: dict[str, Any] | None = None,
+        experiment_id: str | None = None,
+    ) -> dict[str, Any]: ...
+
+
+class LlamaPlanner:
+    def __init__(
+        self,
+        url: str = DScheduler.CHAT_COMPLETIONS_URL,
+        model: str = DScheduler.MODEL_NAME,
+        timeout_seconds: float = DScheduler.CHAT_TIMEOUT_SECONDS,
+        client: Any | None = None,
+    ) -> None:
+        self.url = url
+        self.model = model
+        self.client = client or httpx.AsyncClient(timeout=timeout_seconds)
+
+    async def close(self) -> None:
+        await self.client.aclose()
+
+    async def propose(
+        self,
+        config: dict[str, Any],
+        results: list[dict[str, Any]],
+    ) -> ExperimentProposal:
+        evidence = json.dumps(
+            {"active_configuration": config, "previous_experiments": results},
+            separators=(",", ":"),
+        )
+        response = await self.client.post(
+            self.url,
+            json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": DScheduler.SYSTEM_PROMPT},
+                    {"role": "user", "content": evidence},
+                ],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "experiment_proposal",
+                        "strict": True,
+                        "schema": DScheduler.PROPOSAL_SCHEMA,
+                    },
+                },
+                "max_tokens": DScheduler.MAX_COMPLETION_TOKENS,
+                "stream": False,
+            },
+        )
+        response.raise_for_status()
+        try:
+            content = response.json()["choices"][0]["message"]["content"]
+            proposal_data = json.loads(content)
+        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+            raise PlanningError(
+                "inference service returned invalid proposal JSON"
+            ) from error
+        if not isinstance(proposal_data, dict):
+            raise PlanningError("inference proposal must be a JSON object")
+        return ExperimentProposal.from_dict(proposal_data, config)
+
+
 class Scheduler:
-    """Produce scheduled work without owning or supervising its consumer."""
+    """Execute one explicit planning-and-launch state machine at a time."""
 
     def __init__(
         self,
-        repository: TurnRepository,
+        experiment: ExperimentControl,
+        planner: Planner,
+        plans: PlanningRepository,
         *,
-        prompt: str = DScheduler.PROMPT,
         initial_delay_seconds: float = DScheduler.INITIAL_DELAY_SECONDS,
         interval_seconds: float = DScheduler.INTERVAL_SECONDS,
     ) -> None:
@@ -31,30 +157,72 @@ class Scheduler:
             raise ValueError("initial delay must not be negative")
         if interval_seconds <= 0:
             raise ValueError("interval must be positive")
-        self.repository = repository
-        self.prompt = prompt
+        self.experiment = experiment
+        self.planner = planner
+        self.plans = plans
         self.initial_delay_seconds = initial_delay_seconds
         self.interval_seconds = interval_seconds
 
-    async def enqueue_once(self) -> str | None:
-        """Queue work unless MariaDB already contains an active turn."""
-        return await asyncio.to_thread(
-            self.repository.enqueue,
-            self.prompt,
-            "scheduler",
+    async def run_once(self) -> str | None:
+        status = await self._request(MessageType.GET_EXPERIMENT_STATUS)
+        if status.get("status") in {"queued", "running"}:
+            LOGGER.info("experiment is %s; schedule tick skipped", status["status"])
+            return None
+
+        config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
+        history = await self._request(
+            MessageType.LIST_EXPERIMENT_RESULTS,
+            {"limit": DScheduler.RESULT_HISTORY_LIMIT},
         )
+        results = history.get("results")
+        if not isinstance(results, list):
+            raise PlanningError("experiment service returned invalid result history")
+
+        LOGGER.info("requesting proposal using %d previous results", len(results))
+        proposal = await self.planner.propose(config, results)
+        proposal_data = asdict(proposal)
+        plan_id = await asyncio.to_thread(
+            self.plans.create,
+            proposal_data,
+            results,
+        )
+        try:
+            await self._request(
+                MessageType.SET_EXPERIMENT_CONFIG,
+                {
+                    "epochs": proposal.epochs,
+                    "learning_rate": proposal.learning_rate,
+                },
+            )
+            accepted = await self._request(MessageType.START_EXPERIMENT)
+            experiment_id = accepted["experiment_id"]
+            await asyncio.to_thread(self.plans.mark_started, plan_id, experiment_id)
+        except Exception as error:
+            await asyncio.to_thread(self.plans.mark_failed, plan_id, str(error))
+            raise
+        LOGGER.info("started experiment %s from plan %s", experiment_id, plan_id)
+        return experiment_id
+
+    async def _request(
+        self,
+        message_type: MessageType,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(self.experiment.request, message_type, payload)
 
     async def run(self, stop_event: asyncio.Event) -> None:
         delay = self.initial_delay_seconds
         while not await _wait_or_stop(stop_event, delay):
             try:
-                turn_id = await self.enqueue_once()
-                if turn_id is None:
-                    LOGGER.info("active agent turn exists; schedule tick skipped")
-                else:
-                    LOGGER.info("queued scheduled agent turn %s", turn_id)
-            except (MySQLError, OSError) as error:
-                LOGGER.error("could not queue scheduled agent turn: %s", error)
+                await self.run_once()
+            except (
+                ExperimentClientError,
+                PlanningError,
+                httpx.HTTPError,
+                MySQLError,
+                OSError,
+            ) as error:
+                LOGGER.error("scheduled experiment cycle failed: %s", error)
             delay = self.interval_seconds
 
 
@@ -74,10 +242,13 @@ def _environment_float(name: str, default: float) -> float:
 
 
 async def serve() -> None:
-    repository = MariaDBTurnRepository()
-    await asyncio.to_thread(repository.initialize)
+    plans = MariaDBPlanningRepository()
+    await asyncio.to_thread(plans.initialize)
+    planner = LlamaPlanner()
     scheduler = Scheduler(
-        repository,
+        ExperimentClient(),
+        planner,
+        plans,
         initial_delay_seconds=_environment_float(
             "AKBAR_SCHEDULER_INITIAL_DELAY_SECONDS",
             DScheduler.INITIAL_DELAY_SECONDS,
@@ -86,13 +257,15 @@ async def serve() -> None:
             "AKBAR_SCHEDULER_INTERVAL_SECONDS",
             DScheduler.INTERVAL_SECONDS,
         ),
-        prompt=os.getenv("AKBAR_SCHEDULER_PROMPT", DScheduler.PROMPT),
     )
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(shutdown_signal, stop_event.set)
-    await scheduler.run(stop_event)
+    try:
+        await scheduler.run(stop_event)
+    finally:
+        await planner.close()
 
 
 def main() -> int:

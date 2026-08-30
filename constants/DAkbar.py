@@ -7,12 +7,10 @@ class DAkbar:
     VENV_DIRECTORY: Final[str] = ".venv"
     SERVICE_NAME: Final[str] = "akbar.service"
     EXPERIMENT_SERVICE_NAME: Final[str] = "akbar-experimentd.service"
-    AGENT_SERVICE_NAME: Final[str] = "akbar-agentd.service"
     SCHEDULER_SERVICE_NAME: Final[str] = "akbar-scheduler.service"
     SERVICE_NAMES: Final[tuple[str, ...]] = (
         EXPERIMENT_SERVICE_NAME,
         SERVICE_NAME,
-        AGENT_SERVICE_NAME,
         SCHEDULER_SERVICE_NAME,
     )
     SERVICE_USER: Final[str] = "akbar"

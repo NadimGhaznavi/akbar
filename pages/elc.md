@@ -37,11 +37,10 @@ Terminal states are `completed`, `failed`, `cancelled`, and `interrupted`.
 Starting an experiment must:
 
 1. Confirm that no experiment is active.
-2. Confirm that the previous terminal experiment has been acknowledged.
-3. Atomically reserve the next seed from MariaDB.
-4. Resolve the persisted active experiment configuration with that seed.
-5. Create the experiment record and assign its ID.
-6. Start the in-memory runner.
+2. Atomically reserve the next seed from MariaDB.
+3. Resolve the persisted active experiment configuration with that seed.
+4. Create the experiment record and assign its ID.
+5. Start the in-memory runner.
 
 Start requests are never queued. Repeated requests received while the service
 is not ready must be rejected.
@@ -78,16 +77,6 @@ error or stop reason, but do not manufacture a completed result.
 Recent completed runs can be discovered through bounded result summaries. A
 summary identifies the run and its key configuration and score metrics; the full
 result is retrieved separately by experiment ID.
-
-## Acknowledgement interlock
-
-A terminal experiment must be explicitly acknowledged before the service
-returns to `ready`. Completion alone does not authorize another run. This stops
-bursts of stale or repeated start requests from launching experiments after a
-fast run finishes.
-
-The acknowledgement operation and whether it is available through MCP or only
-through the administrative CLI remain to be implemented.
 
 ## Invariants
 
