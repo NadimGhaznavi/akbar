@@ -29,7 +29,8 @@ class FakeHTTPClient:
     def __init__(
         self,
         content: Any = (
-            '{"epochs":50,"learning_rate":0.0008,'
+            '{"learning_rate":0.0008,"epsilon_start":0.9,'
+            '"epsilon_decay":0.995,'
             '"rationale":"Compare the previous run."}'
         ),
     ) -> None:
@@ -62,14 +63,15 @@ class FakeExperimentControl:
             return {
                 "epochs": 50,
                 "learning_rate": 0.001,
+                "epsilon_start": 0.9,
+                "epsilon_decay": 0.995,
                 "limits": {
-                    "epochs": {"minimum": 50, "maximum": 100_000},
                     "learning_rate": {"minimum": 0.000_001, "maximum": 0.1},
                 },
             }
-        if message_type is MessageType.LIST_EXPERIMENT_RESULTS:
+        if message_type is MessageType.EXECUTE_READ_QUERY:
             return {
-                "results": [
+                "rows": [
                     {
                         "experiment_id": "experiment-1",
                         "epochs": 50,
@@ -98,8 +100,9 @@ class FakePlanner:
     ) -> ExperimentProposal:
         self.inputs.append((config, results))
         return ExperimentProposal(
-            epochs=50,
             learning_rate=0.0008,
+            epsilon_start=0.9,
+            epsilon_decay=0.995,
             rationale="Test a lower rate after reviewing experiment-1.",
         )
 
@@ -173,14 +176,25 @@ class SchedulerTest(unittest.TestCase):
                 (MessageType.GET_EXPERIMENT_STATUS, None),
                 (MessageType.GET_EXPERIMENT_CONFIG, None),
                 (
-                    MessageType.LIST_EXPERIMENT_RESULTS,
-                    {"limit": DScheduler.RESULT_HISTORY_LIMIT},
+                    MessageType.EXECUTE_READ_QUERY,
+                    experiment.calls[2][1],
                 ),
                 (
                     MessageType.SET_EXPERIMENT_CONFIG,
-                    {"epochs": 50, "learning_rate": 0.0008},
+                    {
+                        "learning_rate": 0.0008,
+                        "epsilon_start": 0.9,
+                        "epsilon_decay": 0.995,
+                    },
                 ),
-                (MessageType.START_EXPERIMENT, None),
+                (
+                    MessageType.START_EXPERIMENT,
+                    {
+                        "learning_rate": 0.0008,
+                        "epsilon_start": 0.9,
+                        "epsilon_decay": 0.995,
+                    },
+                ),
             ],
         )
         self.assertEqual(plans.started, [("plan-1", "experiment-2")])
@@ -211,19 +225,20 @@ class SchedulerTest(unittest.TestCase):
 
     def test_proposal_validation_enforces_config_limits(self) -> None:
         config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
-        with self.assertRaisesRegex(PlanningError, "epochs are outside"):
+        with self.assertRaisesRegex(PlanningError, "epsilon_decay"):
             ExperimentProposal.from_dict(
                 {
-                    "epochs": 49,
                     "learning_rate": 0.001,
+                    "epsilon_start": 0.9,
+                    "epsilon_decay": 1.0,
                     "rationale": "Too short.",
                 },
                 config,
             )
 
-    def test_default_schedule_checks_every_fifteen_seconds(self) -> None:
-        self.assertEqual(DScheduler.INITIAL_DELAY_SECONDS, 15)
-        self.assertEqual(DScheduler.INTERVAL_SECONDS, 15)
+    def test_default_schedule_checks_every_three_seconds(self) -> None:
+        self.assertEqual(DScheduler.INITIAL_DELAY_SECONDS, 3)
+        self.assertEqual(DScheduler.INTERVAL_SECONDS, 3)
 
 
 if __name__ == "__main__":

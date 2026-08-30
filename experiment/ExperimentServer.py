@@ -7,6 +7,7 @@ import asyncio
 import logging
 import signal
 from dataclasses import replace
+from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
@@ -16,6 +17,7 @@ import zmq.asyncio
 from constants.DAkbar import DAkbar
 from constants.DExperiment import DExperiment
 from experiment.ExperimentConfig import ExperimentConfig
+from experiment.ExperimentDesign import build_simulation_configs
 from experiment.ExperimentProtocol import (
     ExperimentMessage,
     ExperimentStatus,
@@ -41,11 +43,17 @@ class ExperimentServer:
         control_endpoint: str = DExperiment.CONTROL_ENDPOINT,
         telemetry_endpoint: str = DExperiment.TELEMETRY_ENDPOINT,
         default_config: ExperimentConfig | None = None,
+        runner_factory: Callable[[ExperimentConfig], ExperimentRunner] = ExperimentRunner,
+        config_builder: Callable[
+            [ExperimentConfig], list[ExperimentConfig]
+        ] = build_simulation_configs,
     ) -> None:
         self.repository = repository
         self.control_endpoint = control_endpoint
         self.telemetry_endpoint = telemetry_endpoint
         self.default_config = default_config or ExperimentConfig()
+        self.runner_factory = runner_factory
+        self.config_builder = config_builder
         self.state = ExperimentStateStore()
         self._context = zmq.asyncio.Context.instance()
         self._control = self._context.socket(zmq.ROUTER)
@@ -141,8 +149,6 @@ class ExperimentServer:
             return await self._start(request)
         if request.message_type is MessageType.GET_EXPERIMENT_STATUS:
             return await self._status(request)
-        if request.message_type is MessageType.GET_EXPERIMENT_RESULT:
-            return await self._result(request)
         if request.message_type is MessageType.GET_EXPERIMENT_COUNT:
             return await self._count(request)
         if request.message_type is MessageType.RESOLVE_EXPERIMENT_ID:
@@ -154,8 +160,10 @@ class ExperimentServer:
             )
         if request.message_type is MessageType.SET_EXPERIMENT_CONFIG:
             return await self._set_config(request)
-        if request.message_type is MessageType.LIST_EXPERIMENT_RESULTS:
-            return await self._list_results(request)
+        if request.message_type is MessageType.GET_DATABASE_SCHEMA:
+            return await self._database_schema(request)
+        if request.message_type is MessageType.EXECUTE_READ_QUERY:
+            return await self._execute_read_query(request)
         if request.message_type is MessageType.GET_CURRENT_HIGHSCORE:
             return self._highscore(request)
         if request.message_type is MessageType.STOP_EXPERIMENT:
@@ -165,12 +173,32 @@ class ExperimentServer:
     async def _start(self, request: ExperimentMessage) -> ExperimentMessage:
         if self._runner_task is not None and not self._runner_task.done():
             raise ProtocolError("an experiment is already running")
-        if request.payload:
-            raise ProtocolError("start_experiment does not accept configuration")
-        seed = await asyncio.to_thread(self.repository.allocate_seed)
-        config = replace(self.default_config, seed=seed)
+        allowed = {"learning_rate", "epsilon_start", "epsilon_decay"}
+        unknown = set(request.payload) - allowed
+        if unknown:
+            raise ProtocolError(
+                f"unsupported experiment fields: {', '.join(sorted(unknown))}"
+            )
+        config = replace(
+            self.default_config,
+            epochs=DExperiment.FIXED_EPOCHS,
+            seed=DExperiment.SEEDS[0],
+            **request.payload,
+        )
+        # Validate the complete methodology before accepting the batch.
+        self.config_builder(config)
         experiment_id = str(uuid4())
-        config_data = config.to_dict()
+        config_data = {
+            **config.to_dict(),
+            "methodology": {
+                "version": 1,
+                "epochs": DExperiment.FIXED_EPOCHS,
+                "seeds": list(DExperiment.SEEDS),
+                "variation_fraction": DExperiment.VARIATION_FRACTION,
+                "hyperparameter_configurations": 27,
+                "simulation_count": 135,
+            },
+        }
         await asyncio.to_thread(self.repository.create, experiment_id, config_data)
         self.state.create(experiment_id, config_data)
         self._runner_stop = asyncio.Event()
@@ -189,7 +217,9 @@ class ExperimentServer:
             raise ProtocolError("configuration cannot change during an experiment")
         if not request.payload:
             raise ProtocolError("at least one configuration value is required")
-        unknown = set(request.payload) - {"epochs", "learning_rate"}
+        unknown = set(request.payload) - {
+            "learning_rate", "epsilon_start", "epsilon_decay"
+        }
         if unknown:
             raise ProtocolError(
                 f"unsupported configuration fields: {', '.join(sorted(unknown))}"
@@ -207,13 +237,14 @@ class ExperimentServer:
 
     def _config_payload(self) -> dict[str, Any]:
         return {
-            "epochs": self.default_config.epochs,
+            "epochs": DExperiment.FIXED_EPOCHS,
             "learning_rate": self.default_config.learning_rate,
+            "epsilon_start": self.default_config.epsilon_start,
+            "epsilon_decay": self.default_config.epsilon_decay,
+            "seeds": list(DExperiment.SEEDS),
+            "variation_fraction": DExperiment.VARIATION_FRACTION,
+            "simulations_per_experiment": 135,
             "limits": {
-                "epochs": {
-                    "minimum": DExperiment.MIN_EPOCHS,
-                    "maximum": DExperiment.MAX_EPOCHS,
-                },
                 "learning_rate": {
                     "minimum": DExperiment.MIN_LEARNING_RATE,
                     "maximum": DExperiment.MAX_LEARNING_RATE,
@@ -221,26 +252,40 @@ class ExperimentServer:
             },
         }
 
-    async def _list_results(
+    async def _database_schema(self, request: ExperimentMessage) -> ExperimentMessage:
+        columns = await asyncio.to_thread(self.repository.schema)
+        tables: dict[str, list[dict[str, Any]]] = {}
+        for column in columns:
+            table_name = str(column["table_name"])
+            tables.setdefault(table_name, []).append(
+                {key: value for key, value in column.items() if key != "table_name"}
+            )
+        return request.reply(MessageType.DATABASE_SCHEMA, {"tables": tables})
+
+    async def _execute_read_query(
         self,
         request: ExperimentMessage,
     ) -> ExperimentMessage:
-        limit = request.payload.get(
-            "limit",
-            DExperiment.DEFAULT_RESULT_LIST_LIMIT,
-        )
-        if isinstance(limit, bool) or not isinstance(limit, int):
-            raise ProtocolError("result list limit must be an integer")
-        if not 1 <= limit <= DExperiment.MAX_RESULT_LIST_LIMIT:
+        sql = request.payload.get("sql")
+        parameters = request.payload.get("parameters")
+        max_rows = request.payload.get("max_rows", DExperiment.DEFAULT_QUERY_ROWS)
+        if not isinstance(sql, str):
+            raise ProtocolError("sql must be a string")
+        if parameters is not None and not isinstance(parameters, (dict, list)):
+            raise ProtocolError("parameters must be an object, array, or null")
+        if isinstance(max_rows, bool) or not isinstance(max_rows, int):
+            raise ProtocolError("max_rows must be an integer")
+        if not 1 <= max_rows <= DExperiment.MAX_QUERY_ROWS:
             raise ProtocolError(
-                "result list limit must be between 1 and "
-                f"{DExperiment.MAX_RESULT_LIST_LIMIT}"
+                f"max_rows must be between 1 and {DExperiment.MAX_QUERY_ROWS}"
             )
-        results = await asyncio.to_thread(self.repository.list_results, limit)
-        return request.reply(
-            MessageType.EXPERIMENT_RESULTS,
-            {"results": results, "returned": len(results)},
+        result = await asyncio.to_thread(
+            self.repository.execute_read_query,
+            sql,
+            parameters,
+            max_rows,
         )
+        return request.reply(MessageType.QUERY_RESULT, result)
 
     async def _run_experiment(
         self, experiment_id: str, config: ExperimentConfig
@@ -253,38 +298,87 @@ class ExperimentServer:
             await asyncio.to_thread(self.repository.mark_running, experiment_id)
             state.status = ExperimentStatus.RUNNING
             state.started_at = utc_now()
-            runner_result = await ExperimentRunner(config).run(
-                self._runner_stop,
-                lambda telemetry: self._publish_telemetry(state, telemetry),
+            simulation_configs = self.config_builder(config)
+            failed = 0
+            for index, simulation_config in enumerate(simulation_configs, start=1):
+                if self._runner_stop.is_set():
+                    raise ExperimentCancelled
+                simulation_id = str(uuid4())
+                simulation_data = simulation_config.to_dict()
+                await asyncio.to_thread(
+                    self.repository.create_simulation,
+                    simulation_id,
+                    experiment_id,
+                    simulation_data,
+                )
+                try:
+                    runner_result = await self.runner_factory(simulation_config).run(
+                        self._runner_stop,
+                        lambda telemetry, sid=simulation_id, number=index: (
+                            self._publish_telemetry(
+                                state,
+                                {
+                                    **telemetry,
+                                    "simulation_id": sid,
+                                    "simulation_number": number,
+                                    "simulation_count": len(simulation_configs),
+                                },
+                            )
+                        ),
+                    )
+                    result = {
+                        "schema_version": 1,
+                        "simulation_id": simulation_id,
+                        "experiment_id": experiment_id,
+                        "configuration": simulation_data,
+                        "metrics": {
+                            "epochs_completed": runner_result["epochs"],
+                            "highscore": runner_result["highscore"],
+                            "average_score": runner_result["average_score"],
+                            "average_loss": runner_result["average_loss"],
+                            "total_moves": runner_result["total_moves"],
+                            "replay_size": runner_result["replay_size"],
+                        },
+                        "timing": {
+                            "elapsed_seconds": runner_result["elapsed_seconds"],
+                        },
+                    }
+                    await asyncio.to_thread(
+                        self.repository.finish_simulation,
+                        simulation_id,
+                        ExperimentStatus.COMPLETED.value,
+                        result,
+                        None,
+                    )
+                except ExperimentCancelled:
+                    await asyncio.to_thread(
+                        self.repository.finish_simulation,
+                        simulation_id,
+                        ExperimentStatus.CANCELLED.value,
+                        None,
+                        "Experiment stopped by request",
+                    )
+                    raise
+                except Exception as error:
+                    failed += 1
+                    LOG.exception("Simulation %s failed", simulation_id)
+                    await asyncio.to_thread(
+                        self.repository.finish_simulation,
+                        simulation_id,
+                        ExperimentStatus.FAILED.value,
+                        None,
+                        str(error),
+                    )
+            state.status = (
+                ExperimentStatus.FAILED if failed else ExperimentStatus.COMPLETED
             )
-            state.status = ExperimentStatus.COMPLETED
             state.completed_at = utc_now()
-            result = {
-                "schema_version": 1,
-                "experiment_id": experiment_id,
-                "status": state.status.value,
-                "configuration": state.config,
-                "metrics": {
-                    "epochs_completed": runner_result["epochs"],
-                    "highscore": runner_result["highscore"],
-                    "average_score": runner_result["average_score"],
-                    "average_loss": runner_result["average_loss"],
-                    "total_moves": runner_result["total_moves"],
-                    "replay_size": runner_result["replay_size"],
-                },
-                "timing": {
-                    "started_at": state.started_at,
-                    "completed_at": state.completed_at,
-                    "elapsed_seconds": runner_result["elapsed_seconds"],
-                },
-            }
-            state.result = result
             await asyncio.to_thread(
                 self.repository.finish,
                 experiment_id,
                 state.status.value,
-                result,
                 None,
+                f"{failed} simulations failed" if failed else None,
             )
         except ExperimentCancelled:
             state.status = ExperimentStatus.CANCELLED
@@ -315,7 +409,12 @@ class ExperimentServer:
         state.epoch = telemetry["epoch"]
         state.score = telemetry["score"]
         state.highscore = telemetry["highscore"]
-        state.progress = telemetry["progress"]
+        state.simulation_number = telemetry.get("simulation_number", 1)
+        state.simulation_count = telemetry.get("simulation_count", 1)
+        state.simulation_id = telemetry.get("simulation_id")
+        state.progress = (
+            state.simulation_number - 1 + telemetry["progress"]
+        ) / state.simulation_count
         message = ExperimentMessage(
             MessageType.TELEMETRY,
             telemetry,
@@ -346,30 +445,6 @@ class ExperimentServer:
             MessageType.EXPERIMENT_STATUS,
             data,
             data["experiment_id"],
-        )
-
-    async def _result(self, request: ExperimentMessage) -> ExperimentMessage:
-        if not request.experiment_id:
-            raise ProtocolError("experiment_id is required")
-        state = self.state.get(request.experiment_id)
-        if state is not None:
-            if state.status is not ExperimentStatus.COMPLETED or state.result is None:
-                raise ProtocolError("experiment result is not available")
-            result = state.result
-        else:
-            record = await asyncio.to_thread(
-                self.repository.get,
-                request.experiment_id,
-            )
-            if record is None:
-                raise ProtocolError("experiment not found")
-            result = record["result"]
-            if record["status"] != ExperimentStatus.COMPLETED.value or result is None:
-                raise ProtocolError("experiment result is not available")
-        return request.reply(
-            MessageType.EXPERIMENT_RESULT,
-            result,
-            request.experiment_id,
         )
 
     async def _count(self, request: ExperimentMessage) -> ExperimentMessage:

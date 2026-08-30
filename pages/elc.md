@@ -21,10 +21,10 @@ queued/running → interrupted    (service restart)
 ```
 
 - **Ready** — The service may accept one new experiment.
-- **Queued** — The experiment has an ID, seed, configuration, and database
+- **Queued** — The experiment has an ID, baseline configuration, and database
   record but has not entered the runner.
-- **Running** — The simulation owns the active in-memory state.
-- **Completed** — The final versioned result has been stored.
+- **Running** — One of the batch's simulations owns the active in-memory state.
+- **Completed** — All 135 simulations reached a terminal state.
 - **Failed** — Execution ended with a recorded error.
 - **Cancelled** — A stop request ended execution cleanly.
 - **Interrupted** — The service restarted while the experiment was queued or
@@ -37,20 +37,19 @@ Terminal states are `completed`, `failed`, `cancelled`, and `interrupted`.
 Starting an experiment must:
 
 1. Confirm that no experiment is active.
-2. Atomically reserve the next seed from MariaDB.
-3. Resolve the persisted active experiment configuration with that seed.
-4. Create the experiment record and assign its ID.
-5. Start the in-memory runner.
+2. Validate the submitted learning rate, initial epsilon, and epsilon decay.
+3. Expand them into 27 nearby hyperparameter configurations.
+4. Assign the five fixed seeds to every configuration.
+5. Create the experiment record and start sequential simulation execution.
 
 Start requests are never queued. Repeated requests received while the service
 is not ready must be rejected.
 
 ## Configuration boundary
 
-The active configuration is stored in MariaDB and loaded when the experiment
-service starts. MCP tools may set the epoch count from 50 through 100,000 and the
-learning rate from 0.000001 through 0.1. Configuration changes are rejected
-while an experiment is queued or running and affect only subsequent runs.
+Every simulation runs for exactly 1,500 epochs. Each submitted hyperparameter
+is varied by five percent into three values; bounded values shift inward when
+necessary. Epsilon decay varies its decay amount (`1 - epsilon_decay`).
 
 ## Running boundary
 
@@ -63,26 +62,28 @@ and is not itself an experiment result.
 
 ## Result boundary
 
-A completed experiment stores one versioned result document under its full
-experiment ID. It contains:
+A completed simulation stores one versioned raw result document linked to its
+parent experiment ID. It contains:
 
 - The assigned seed and resolved configuration.
-- Aggregate score, loss, move, and replay metrics.
+- The runner's score, loss, move, and replay metrics.
 - Start, completion, and elapsed timing.
 - Final lifecycle status.
 
 Failed, cancelled, and interrupted experiments store their terminal status and
 error or stop reason, but do not manufacture a completed result.
 
-Recent completed runs can be discovered through bounded result summaries. A
-summary identifies the run and its key configuration and score metrics; the full
-result is retrieved separately by experiment ID.
+Akbar discovers the schema and issues arbitrary read-only SQL to retrieve,
+filter, join, group, aggregate, or order these rows. The persistence layer does
+not decide which results are best and does not pre-aggregate the evidence.
 
 ## Invariants
 
 - At most one experiment is queued or running.
-- Every accepted experiment has a durable ID, unique assigned seed, and
-  configuration record before execution begins.
+- Every accepted experiment has a durable ID and baseline configuration before
+  execution begins.
+- Every simulation has its own durable ID, full effective configuration, fixed
+  seed, status, and raw result or error.
 - Every configuration change is validated and persisted before it becomes
   active.
 - Database access never enters the simulation hot loop.

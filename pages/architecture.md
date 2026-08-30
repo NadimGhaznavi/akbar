@@ -31,8 +31,8 @@ queue in the scheduled path.
 
 ## Supporting components
 
-- **MariaDB** stores experiment configuration, planning decisions, lifecycle
-  records, results, and the seed sequence.
+- **MariaDB** stores experiment configuration, planning decisions, batch
+  lifecycle records, and one raw result per simulation run.
 - **MCP tool package (`tools`)** supports interactive web chat and project
   inspection. It is not responsible for scheduled workflow execution.
 - **ZMQ control plane** carries versioned experiment requests and replies.
@@ -56,7 +56,7 @@ check authoritative experiment state
         └── idle/terminal
                 │
                 ▼
-load active config and bounded previous results
+load active config and bounded raw simulation results
                 │
                 ▼
 ask LLM to review old experiments and propose next config
@@ -91,8 +91,9 @@ The language model returns one schema-constrained proposal:
 
 ```json
 {
-  "epochs": 50,
   "learning_rate": 0.0008,
+  "epsilon_start": 0.9,
+  "epsilon_decay": 0.995,
   "rationale": "The previous results justify testing a smaller learning rate."
 }
 ```
@@ -103,14 +104,15 @@ persisted before its experiment is launched.
 
 ## Experiment execution
 
-The experiment service allocates the next durable seed, snapshots the selected
-configuration, creates the lifecycle record, and starts the runner. The runner
-keeps its model and training state in memory. A typical 50-epoch experiment
-takes less than one second; language-model planning is expected to dominate the
-wall-clock cycle.
+The experiment service snapshots the three submitted hyperparameters and creates
+a lifecycle record. It varies each value by five percent to form a 3 x 3 x 3
+grid, then runs all 27 configurations with seeds 1970 through 1974. The resulting
+135 simulations each run for exactly 1,500 epochs and persist separate raw result
+rows. Epsilon decay is perturbed in terms of `1 - epsilon_decay`, preserving
+useful resolution near one.
 
-The service publishes transient epoch telemetry over ZMQ and persists the final
-result at the terminal lifecycle boundary.
+The service publishes transient epoch telemetry over ZMQ and persists each
+simulation result only after that simulation leaves its hot loop.
 
 ## State ownership
 
@@ -118,8 +120,8 @@ result at the terminal lifecycle boundary.
 |---|---|---|
 | Active configuration | MariaDB | Durable |
 | Planning proposal and rationale | MariaDB | Durable |
-| Experiment lifecycle and results | MariaDB | Durable |
-| Experiment seed sequence | MariaDB | Durable |
+| Experiment batch lifecycle | MariaDB | Durable |
+| Individual simulation configurations and results | MariaDB | Durable |
 | Active experiment and current metrics | Experiment service | Process lifetime |
 | Snake model and replay memory | Snake runner | One experiment |
 | Per-epoch telemetry | ZMQ PUB socket | Ephemeral |
@@ -130,7 +132,9 @@ result at the terminal lifecycle boundary.
 - MariaDB is accessed at experiment lifecycle boundaries and for explicit
   historical queries, never within or between simulation epochs.
 - At most one experiment may be queued or running.
-- One valid planning proposal launches exactly one experiment.
+- One valid planning proposal launches one 135-simulation experiment.
+- Akbar may issue arbitrary single-statement read-only SQL for analysis; the
+  experiment layer does not rank or aggregate results for him.
 - Interactive chat and scheduled planning share the inference server but have
   independent workflows.
 - Interactive MCP tool use cannot become an implicit scheduled-workflow

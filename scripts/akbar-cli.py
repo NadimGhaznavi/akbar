@@ -60,8 +60,8 @@ Akbar Experiment CLI
 3. Count persisted experiments
 4. Show experiment status
 5. Show current highscore
-6. List recent completed results
-7. Show persisted result
+6. Show database schema
+7. Execute a read-only SQL query
 8. Quit
 """
 
@@ -83,8 +83,8 @@ Akbar Experiment CLI
             "3": self.count,
             "4": self.status,
             "5": self.highscore,
-            "6": self.list_results,
-            "7": self.result,
+            "6": self.database_schema,
+            "7": self.query_database,
         }
         while True:
             self._write(self.MENU.rstrip())
@@ -129,20 +129,17 @@ Akbar Experiment CLI
         self._remember(response)
         self._show(response)
 
-    def result(self) -> None:
-        response = self.client.request(
-            MessageType.GET_EXPERIMENT_RESULT,
-            experiment_id=self._select_id(required=True),
-        )
-        self._remember(response)
-        self._show(response)
+    def database_schema(self) -> None:
+        self._show(self.client.request(MessageType.GET_DATABASE_SCHEMA))
 
-    def list_results(self) -> None:
-        response = self.client.request(
-            MessageType.LIST_EXPERIMENT_RESULTS,
-            {"limit": 10},
-        )
-        self._show(response)
+    def query_database(self) -> None:
+        sql = self.input("Read-only SQL: ").strip()
+        if not sql:
+            raise ValueError("a SQL query is required")
+        self._show(self.client.request(
+            MessageType.EXECUTE_READ_QUERY,
+            {"sql": sql, "max_rows": 1000},
+        ))
 
     def _select_id(self, required: bool) -> str | None:
         default = (

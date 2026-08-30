@@ -12,7 +12,7 @@ from snake_lab.SnakeExperiment import SnakeExperiment
 class SnakeGameTest(unittest.TestCase):
     def test_experiment_defaults_match_the_working_configuration(self) -> None:
         config = ExperimentConfig()
-        self.assertEqual(config.epochs, 50)
+        self.assertEqual(config.epochs, 1_500)
         self.assertEqual(config.learning_rate, 0.001)
 
     def test_seed_reproduces_initial_state_and_food(self) -> None:
