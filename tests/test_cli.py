@@ -34,12 +34,9 @@ class FakeClient:
             return {"experiment_count": 12}
         if message_type is MessageType.GET_EXPERIMENT_CONFIG:
             return {"epochs": 50, "learning_rate": 0.001}
-        if message_type is MessageType.LIST_EXPERIMENT_RESULTS:
+        if message_type is MessageType.GET_DATABASE_SCHEMA:
             return {
-                "returned": 1,
-                "results": [
-                    {"experiment_id": EXPERIMENT_ID, "highscore": 7}
-                ],
+                "tables": {"simulation_runs": [{"column_name": "highscore"}]},
             }
         if message_type is MessageType.RESOLVE_EXPERIMENT_ID:
             return {"experiment_id": EXPERIMENT_ID}
@@ -72,7 +69,7 @@ class CLIFormattingTest(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertIn('"learning_rate": 0.001', rendered)
         self.assertIn('"experiment_count": 12', rendered)
-        self.assertIn('"experiment_id": "[a9f0]"', rendered)
+        self.assertIn('"simulation_runs"', rendered)
         self.assertNotIn(EXPERIMENT_ID, rendered)
 
     def test_cli_exposes_no_mutating_actions(self) -> None:

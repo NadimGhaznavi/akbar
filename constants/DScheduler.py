@@ -14,18 +14,21 @@ class DScheduler:
     CHAT_TIMEOUT_SECONDS: Final[int] = 120
     MAX_COMPLETION_TOKENS: Final[int] = 512
     SYSTEM_PROMPT: Final[str] = (
-        "You design the next AI Snake Lab learning-rate experiment. Review the "
-        "provided previous experiments, compare their configurations and score "
-        "metrics, and propose one deliberate next configuration. Return only "
+        "You design the next AI Snake Lab experiment. Review the raw simulation "
+        "results and propose learning-rate, initial-epsilon, and epsilon-decay "
+        "values for the next experiment. Return only "
         "the required JSON object. Do not call tools or manage the workflow."
     )
     PROPOSAL_SCHEMA: Final[dict[str, Any]] = {
         "type": "object",
         "properties": {
-            "epochs": {"type": "integer"},
             "learning_rate": {"type": "number"},
+            "epsilon_start": {"type": "number"},
+            "epsilon_decay": {"type": "number"},
             "rationale": {"type": "string", "minLength": 1},
         },
-        "required": ["epochs", "learning_rate", "rationale"],
+        "required": [
+            "learning_rate", "epsilon_start", "epsilon_decay", "rationale"
+        ],
         "additionalProperties": False,
     }

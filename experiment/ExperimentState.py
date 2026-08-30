@@ -22,11 +22,13 @@ class ExperimentState:
     score: int = 0
     highscore: int = 0
     progress: float = 0.0
+    simulation_number: int = 0
+    simulation_count: int = 0
+    simulation_id: str | None = None
     created_at: str = field(default_factory=utc_now)
     started_at: str | None = None
     completed_at: str | None = None
     error: str | None = None
-    result: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

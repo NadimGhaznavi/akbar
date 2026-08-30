@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Protocol
 
 from constants.DExperiment import DExperiment
@@ -12,7 +15,6 @@ from database.Database import connect
 class ExperimentRepository(Protocol):
     def initialize(self) -> None: ...
     def mark_interrupted(self) -> None: ...
-    def allocate_seed(self) -> int: ...
     def load_config(self) -> dict[str, Any] | None: ...
     def save_config(self, config: dict[str, Any]) -> None: ...
     def create(self, experiment_id: str, config: dict[str, Any]) -> None: ...
@@ -27,7 +29,17 @@ class ExperimentRepository(Protocol):
     def get(self, experiment_id: str) -> dict[str, Any] | None: ...
     def count(self) -> int: ...
     def resolve_suffix(self, suffix: str) -> list[str]: ...
-    def list_results(self, limit: int) -> list[dict[str, Any]]: ...
+    def create_simulation(
+        self, simulation_id: str, experiment_id: str, config: dict[str, Any]
+    ) -> None: ...
+    def finish_simulation(
+        self, simulation_id: str, status: str,
+        result: dict[str, Any] | None = None, error: str | None = None,
+    ) -> None: ...
+    def schema(self) -> list[dict[str, Any]]: ...
+    def execute_read_query(
+        self, sql: str, parameters: dict[str, Any] | list[Any] | None, max_rows: int
+    ) -> dict[str, Any]: ...
 
 
 class MariaDBExperimentRepository:
@@ -54,9 +66,32 @@ class MariaDBExperimentRepository:
             )
             cursor.execute(
                 """
-                CREATE TABLE IF NOT EXISTS experiment_seed_sequence (
-                    sequence_name VARCHAR(32) PRIMARY KEY,
-                    next_seed BIGINT UNSIGNED NOT NULL
+                CREATE TABLE IF NOT EXISTS simulation_runs (
+                    simulation_id CHAR(36) PRIMARY KEY,
+                    experiment_id CHAR(36) NOT NULL,
+                    status VARCHAR(32) NOT NULL,
+                    seed BIGINT NOT NULL,
+                    epochs INT NOT NULL,
+                    learning_rate DOUBLE NOT NULL,
+                    epsilon_start DOUBLE NOT NULL,
+                    epsilon_decay DOUBLE NOT NULL,
+                    epochs_completed INT NULL,
+                    highscore INT NULL,
+                    average_score DOUBLE NULL,
+                    average_loss DOUBLE NULL,
+                    total_moves BIGINT NULL,
+                    replay_size INT NULL,
+                    elapsed_seconds DOUBLE NULL,
+                    config_json LONGTEXT NOT NULL,
+                    result_json LONGTEXT NULL,
+                    error_text TEXT NULL,
+                    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                    started_at DATETIME(6) NULL,
+                    completed_at DATETIME(6) NULL,
+                    INDEX idx_simulation_experiment (experiment_id),
+                    INDEX idx_simulation_status (status),
+                    CONSTRAINT fk_simulation_experiment FOREIGN KEY (experiment_id)
+                        REFERENCES experiments (experiment_id)
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                 """
             )
@@ -71,36 +106,6 @@ class MariaDBExperimentRepository:
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                 """
             )
-            cursor.execute(
-                """
-                INSERT IGNORE INTO experiment_seed_sequence
-                    (sequence_name, next_seed)
-                VALUES ('default', %s)
-                """,
-                (DExperiment.DEFAULT_SEED,),
-            )
-            cursor.execute(
-                """
-                SELECT MAX(
-                    CAST(
-                        JSON_UNQUOTE(JSON_EXTRACT(config_json, '$.seed'))
-                        AS UNSIGNED
-                    )
-                ) AS maximum_seed
-                FROM experiments
-                WHERE JSON_EXTRACT(config_json, '$.seed') IS NOT NULL
-                """
-            )
-            row = cursor.fetchone()
-            if row["maximum_seed"] is not None:
-                cursor.execute(
-                    """
-                    UPDATE experiment_seed_sequence
-                    SET next_seed = GREATEST(next_seed, %s)
-                    WHERE sequence_name = 'default'
-                    """,
-                    (int(row["maximum_seed"]) + 1,),
-                )
 
     def mark_interrupted(self) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
@@ -112,36 +117,14 @@ class MariaDBExperimentRepository:
                 WHERE status IN ('queued', 'running')
                 """
             )
-
-    def allocate_seed(self) -> int:
-        with self._connect() as connection, connection.cursor() as cursor:
-            connection.begin()
-            try:
-                cursor.execute(
-                    """
-                    SELECT next_seed
-                    FROM experiment_seed_sequence
-                    WHERE sequence_name = 'default'
-                    FOR UPDATE
-                    """
-                )
-                row = cursor.fetchone()
-                if row is None:
-                    raise RuntimeError("experiment seed sequence is not initialized")
-                seed = int(row["next_seed"])
-                cursor.execute(
-                    """
-                    UPDATE experiment_seed_sequence
-                    SET next_seed = next_seed + 1
-                    WHERE sequence_name = 'default'
-                    """
-                )
-                connection.commit()
-            except Exception:
-                connection.rollback()
-                raise
-        # return seed
-        return 1970
+            cursor.execute(
+                """
+                UPDATE simulation_runs
+                SET status = 'interrupted', completed_at = CURRENT_TIMESTAMP(6),
+                    error_text = 'Experiment service restarted during execution'
+                WHERE status IN ('queued', 'running')
+                """
+            )
 
     def load_config(self) -> dict[str, Any] | None:
         with self._connect() as connection, connection.cursor() as cursor:
@@ -255,38 +238,133 @@ class MariaDBExperimentRepository:
             rows = cursor.fetchall()
         return [str(row["experiment_id"]) for row in rows]
 
-    def list_results(self, limit: int) -> list[dict[str, Any]]:
+    def create_simulation(
+        self,
+        simulation_id: str,
+        experiment_id: str,
+        config: dict[str, Any],
+    ) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT experiment_id, config_json, result_json, completed_at
-                FROM experiments
-                WHERE status = 'completed' AND result_json IS NOT NULL
-                ORDER BY completed_at DESC
-                LIMIT %s
+                INSERT INTO simulation_runs (
+                    simulation_id, experiment_id, status, seed, epochs,
+                    learning_rate, epsilon_start, epsilon_decay, config_json,
+                    started_at
+                ) VALUES (%s, %s, 'running', %s, %s, %s, %s, %s, %s,
+                          CURRENT_TIMESTAMP(6))
                 """,
-                (limit,),
+                (
+                    simulation_id,
+                    experiment_id,
+                    config["seed"],
+                    config["epochs"],
+                    config["learning_rate"],
+                    config["epsilon_start"],
+                    config["epsilon_decay"],
+                    json.dumps(config, separators=(",", ":")),
+                ),
             )
-            rows = cursor.fetchall()
 
-        summaries = []
-        for row in rows:
-            config = json.loads(row["config_json"])
-            result = json.loads(row["result_json"])
-            metrics = result.get("metrics", {})
-            summaries.append(
-                {
-                    "experiment_id": row["experiment_id"],
-                    "seed": config.get("seed"),
-                    "epochs": config.get("epochs"),
-                    "learning_rate": config.get("learning_rate"),
-                    "highscore": metrics.get("highscore"),
-                    "average_score": metrics.get("average_score"),
-                    "completed_at": (
-                        row["completed_at"].isoformat()
-                        if row["completed_at"]
-                        else None
-                    ),
-                }
+    def finish_simulation(
+        self,
+        simulation_id: str,
+        status: str,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> None:
+        result_json = json.dumps(result, separators=(",", ":")) if result else None
+        metrics = result.get("metrics", {}) if result else {}
+        timing = result.get("timing", {}) if result else {}
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE simulation_runs
+                SET status = %s, result_json = %s, error_text = %s,
+                    epochs_completed = %s, highscore = %s,
+                    average_score = %s, average_loss = %s,
+                    total_moves = %s, replay_size = %s, elapsed_seconds = %s,
+                    completed_at = CURRENT_TIMESTAMP(6)
+                WHERE simulation_id = %s
+                """,
+                (
+                    status,
+                    result_json,
+                    error,
+                    metrics.get("epochs_completed"),
+                    metrics.get("highscore"),
+                    metrics.get("average_score"),
+                    metrics.get("average_loss"),
+                    metrics.get("total_moves"),
+                    metrics.get("replay_size"),
+                    timing.get("elapsed_seconds"),
+                    simulation_id,
+                ),
             )
-        return summaries
+
+    def schema(self) -> list[dict[str, Any]]:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name,
+                       DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable,
+                       COLUMN_KEY AS column_key
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                ORDER BY TABLE_NAME, ORDINAL_POSITION
+                """
+            )
+            return list(cursor.fetchall())
+
+    def execute_read_query(
+        self,
+        sql: str,
+        parameters: dict[str, Any] | list[Any] | None,
+        max_rows: int,
+    ) -> dict[str, Any]:
+        statement = validate_read_query(sql)
+        with self._connect() as connection, connection.cursor() as cursor:
+            try:
+                cursor.execute(
+                    "SET SESSION max_statement_time = %s",
+                    (DExperiment.QUERY_TIMEOUT_SECONDS,),
+                )
+                cursor.execute("START TRANSACTION READ ONLY")
+                cursor.execute(statement, parameters or ())
+                columns = [item[0] for item in cursor.description or ()]
+                rows = [
+                    {key: _json_value(value) for key, value in row.items()}
+                    for row in cursor.fetchmany(max_rows + 1)
+                ]
+            finally:
+                connection.rollback()
+        truncated = len(rows) > max_rows
+        return {
+            "columns": columns,
+            "rows": rows[:max_rows],
+            "returned": min(len(rows), max_rows),
+            "truncated": truncated,
+        }
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def validate_read_query(sql: str) -> str:
+    statement = sql.strip()
+    without_comments = re.sub(r"/\*.*?\*/|--[^\r\n]*|#[^\r\n]*", " ", statement, flags=re.S)
+    normalized = " ".join(without_comments.split()).lower()
+    if not normalized.lstrip("(").startswith(("select", "with")):
+        raise ValueError("only SELECT statements and read-only CTEs are allowed")
+    if ";" in statement.rstrip("; \t\r\n"):
+        raise ValueError("exactly one SQL statement is allowed")
+    if re.search(r"\binto\s+(?:out|dump)file\b|\bload_file\s*\(", normalized):
+        raise ValueError("server filesystem access is not allowed")
+    return statement

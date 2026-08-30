@@ -17,6 +17,7 @@ class ExperimentConfig:
     batch_size: int = 64
     gamma: float = 0.9
     learning_rate: float = DExperiment.DEFAULT_LEARNING_RATE
+    learning_rate_step: float = DExperiment.DEFAULT_LEARNING_RATE_STEP
     epsilon_start: float = 1.0
     epsilon_min: float = 0.01
     epsilon_decay: float = 0.995
