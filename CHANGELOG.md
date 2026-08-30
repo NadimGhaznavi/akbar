@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-08-30 @ 05:46
+
 ### Changed
 
 - Made an empty experiment service report authoritative `ready` status instead
