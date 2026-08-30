@@ -14,6 +14,12 @@ class UpgradeBoundaryTest(unittest.TestCase):
         self.assertIn(Path("scripts/akbar-cli.py"), destinations)
         self.assertIn(Path("scripts/install.py"), destinations)
         self.assertIn(Path("scripts/upgrade.py"), destinations)
+        self.assertIn(Path("scheduler/SchedulerServer.py"), destinations)
+        self.assertIn(Path("agent/AgentServer.py"), destinations)
+        self.assertIn(Path("orchestration/TurnRepository.py"), destinations)
+        self.assertIn(Path("tools/__main__.py"), destinations)
+        self.assertIn(Path("tools/experiments.py"), destinations)
+        self.assertNotIn(Path("tools.py"), destinations)
 
     def test_runtime_replacement_preserves_environment_and_unowned_data(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
