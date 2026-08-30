@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Made experiment seeds database-assigned, durable, and automatically
+  incrementing so consecutive runs are unique by default.
 - Condensed the architecture guide into a component and boundary reference.
 - Made `scripts/akbar-cli.py` the canonical CLI source and installed path.
 - Added the CLI, installer, and upgrade entry points to the installed
