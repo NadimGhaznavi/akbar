@@ -18,6 +18,7 @@ class MemoryRepository:
     def __init__(self) -> None:
         self.records: dict[str, dict[str, Any]] = {}
         self.next_seed = 1970
+        self.config: dict[str, Any] | None = None
 
     def initialize(self) -> None:
         pass
@@ -29,6 +30,12 @@ class MemoryRepository:
         seed = self.next_seed
         self.next_seed += 1
         return seed
+
+    def load_config(self) -> dict[str, Any] | None:
+        return dict(self.config) if self.config is not None else None
+
+    def save_config(self, config: dict[str, Any]) -> None:
+        self.config = dict(config)
 
     def create(self, experiment_id: str, config: dict[str, Any]) -> None:
         self.records[experiment_id] = {
@@ -86,7 +93,7 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
             control_endpoint=self.control_endpoint,
             telemetry_endpoint=self.telemetry_endpoint,
             default_config=ExperimentConfig(
-                epochs=3,
+                epochs=50,
                 seed=7,
                 board_size=8,
                 max_moves_multiplier=10,
@@ -120,7 +127,7 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         )
         experiment_id = accepted["experiment_id"]
 
-        for _ in range(20):
+        for _ in range(100):
             status = await self.request(
                 MessageType.GET_EXPERIMENT_STATUS,
                 experiment_id=experiment_id,
@@ -130,8 +137,8 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.01)
 
         self.assertEqual(status["status"], "completed")
-        self.assertEqual(status["epoch"], 3)
-        self.assertEqual(status["result"]["metrics"]["epochs_completed"], 3)
+        self.assertEqual(status["epoch"], 50)
+        self.assertEqual(status["result"]["metrics"]["epochs_completed"], 50)
         result = await self.request(
             MessageType.GET_EXPERIMENT_RESULT,
             experiment_id=experiment_id,
@@ -139,7 +146,7 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["schema_version"], 1)
         self.assertEqual(result["experiment_id"], experiment_id)
         self.assertEqual(result["configuration"], status["config"])
-        self.assertEqual(result["metrics"]["epochs_completed"], 3)
+        self.assertEqual(result["metrics"]["epochs_completed"], 50)
         self.assertIn("elapsed_seconds", result["timing"])
         highscore = await self.request(
             MessageType.GET_CURRENT_HIGHSCORE,
@@ -233,6 +240,36 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["config"]["seed"], 1970)
         self.assertEqual(second["config"]["seed"], 1971)
         self.assertEqual(self.repository.records[first_id]["config"]["seed"], 1970)
+
+    async def test_config_tools_persist_bounded_epochs_and_learning_rate(self) -> None:
+        epochs = await self.request(
+            MessageType.SET_EXPERIMENT_CONFIG,
+            payload={"epochs": 75},
+        )
+        learning_rate = await self.request(
+            MessageType.SET_EXPERIMENT_CONFIG,
+            payload={"learning_rate": 0.002},
+        )
+        current = await self.request(MessageType.GET_EXPERIMENT_CONFIG)
+        self.assertEqual(epochs["epochs"], 75)
+        self.assertEqual(learning_rate["learning_rate"], 0.002)
+        self.assertEqual(current["epochs"], 75)
+        self.assertEqual(current["learning_rate"], 0.002)
+        self.assertEqual(self.repository.config["epochs"], 75)
+        self.assertEqual(self.repository.config["learning_rate"], 0.002)
+
+    async def test_config_tools_reject_values_outside_limits(self) -> None:
+        for payload in (
+            {"epochs": 49},
+            {"epochs": 100_001},
+            {"learning_rate": 0.000_000_1},
+            {"learning_rate": 0.2},
+        ):
+            with self.assertRaises(ExperimentClientError):
+                await self.request(
+                    MessageType.SET_EXPERIMENT_CONFIG,
+                    payload=payload,
+                )
 
 
 if __name__ == "__main__":

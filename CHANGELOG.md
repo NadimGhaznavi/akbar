@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-30 @ 03:39
+
+### Changed
+
+- Replaced the fixed epoch and learning-rate settings with a validated active
+  configuration persisted in MariaDB and loaded at service startup.
+- Set the minimum and default experiment length to 50 epochs while retaining
+  the working `0.001` learning-rate default; older lower persisted values are
+  promoted on startup.
+
+### Added
+
+- Experiment Life Cycle specification covering states, persistence boundaries,
+  result deliverables, invariants, and the planned acknowledgement interlock.
+- MCP tools to inspect the active experiment configuration and independently set
+  epochs or learning rate within enforced bounds.
+- Numbered MCP self-documentation tools that explain Akbar's experiment,
+  configuration, and run workflow to the model.
+
+---
+
 ## [0.7.1] - 2026-08-30 @ 02:52
 
 ### Changed

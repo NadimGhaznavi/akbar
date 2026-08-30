@@ -58,6 +58,24 @@ class ExperimentServer:
         """Initialize persistence, bind sockets, and serve until stopped."""
         await asyncio.to_thread(self.repository.initialize)
         await asyncio.to_thread(self.repository.mark_interrupted)
+        persisted_config = await asyncio.to_thread(self.repository.load_config)
+        if persisted_config is None:
+            await asyncio.to_thread(
+                self.repository.save_config,
+                self.default_config.to_dict(),
+            )
+        else:
+            normalized_config = dict(persisted_config)
+            normalized_config["epochs"] = max(
+                DExperiment.MIN_EPOCHS,
+                normalized_config["epochs"],
+            )
+            self.default_config = ExperimentConfig(**normalized_config)
+            if normalized_config != persisted_config:
+                await asyncio.to_thread(
+                    self.repository.save_config,
+                    self.default_config.to_dict(),
+                )
         self._control.setsockopt(zmq.LINGER, 0)
         self._telemetry.setsockopt(zmq.LINGER, 0)
         self._telemetry.setsockopt(
@@ -129,6 +147,13 @@ class ExperimentServer:
             return await self._count(request)
         if request.message_type is MessageType.RESOLVE_EXPERIMENT_ID:
             return await self._resolve_experiment_id(request)
+        if request.message_type is MessageType.GET_EXPERIMENT_CONFIG:
+            return request.reply(
+                MessageType.EXPERIMENT_CONFIG,
+                self._config_payload(),
+            )
+        if request.message_type is MessageType.SET_EXPERIMENT_CONFIG:
+            return await self._set_config(request)
         if request.message_type is MessageType.GET_CURRENT_HIGHSCORE:
             return self._highscore(request)
         if request.message_type is MessageType.STOP_EXPERIMENT:
@@ -156,6 +181,43 @@ class ExperimentServer:
             {"status": ExperimentStatus.QUEUED.value, "config": config_data},
             experiment_id,
         )
+
+    async def _set_config(self, request: ExperimentMessage) -> ExperimentMessage:
+        if self._runner_task is not None and not self._runner_task.done():
+            raise ProtocolError("configuration cannot change during an experiment")
+        if not request.payload:
+            raise ProtocolError("at least one configuration value is required")
+        unknown = set(request.payload) - {"epochs", "learning_rate"}
+        if unknown:
+            raise ProtocolError(
+                f"unsupported configuration fields: {', '.join(sorted(unknown))}"
+            )
+        updated = replace(self.default_config, **request.payload)
+        await asyncio.to_thread(
+            self.repository.save_config,
+            updated.to_dict(),
+        )
+        self.default_config = updated
+        return request.reply(
+            MessageType.EXPERIMENT_CONFIG_UPDATED,
+            self._config_payload(),
+        )
+
+    def _config_payload(self) -> dict[str, Any]:
+        return {
+            "epochs": self.default_config.epochs,
+            "learning_rate": self.default_config.learning_rate,
+            "limits": {
+                "epochs": {
+                    "minimum": DExperiment.MIN_EPOCHS,
+                    "maximum": DExperiment.MAX_EPOCHS,
+                },
+                "learning_rate": {
+                    "minimum": DExperiment.MIN_LEARNING_RATE,
+                    "maximum": DExperiment.MAX_LEARNING_RATE,
+                },
+            },
+        }
 
     async def _run_experiment(
         self, experiment_id: str, config: ExperimentConfig

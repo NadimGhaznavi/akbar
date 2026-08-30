@@ -16,7 +16,7 @@ class ExperimentConfig:
     replay_capacity: int = 10_000
     batch_size: int = 64
     gamma: float = 0.9
-    learning_rate: float = 0.001
+    learning_rate: float = DExperiment.DEFAULT_LEARNING_RATE
     epsilon_start: float = 1.0
     epsilon_min: float = 0.01
     epsilon_decay: float = 0.995
@@ -24,9 +24,10 @@ class ExperimentConfig:
     def __post_init__(self) -> None:
         if isinstance(self.epochs, bool) or not isinstance(self.epochs, int):
             raise TypeError("epochs must be an integer")
-        if not 1 <= self.epochs <= DExperiment.MAX_EPOCHS:
+        if not DExperiment.MIN_EPOCHS <= self.epochs <= DExperiment.MAX_EPOCHS:
             raise ValueError(
-                f"epochs must be between 1 and {DExperiment.MAX_EPOCHS}"
+                "epochs must be between "
+                f"{DExperiment.MIN_EPOCHS} and {DExperiment.MAX_EPOCHS}"
             )
         if isinstance(self.seed, bool) or not isinstance(self.seed, int):
             raise TypeError("seed must be an integer")
@@ -40,8 +41,20 @@ class ExperimentConfig:
             raise ValueError("batch_size must fit within replay_capacity")
         if not 0 <= self.gamma <= 1:
             raise ValueError("gamma must be between 0 and 1")
-        if self.learning_rate <= 0:
-            raise ValueError("learning_rate must be positive")
+        if isinstance(self.learning_rate, bool) or not isinstance(
+            self.learning_rate, (int, float)
+        ):
+            raise TypeError("learning_rate must be a number")
+        if not (
+            DExperiment.MIN_LEARNING_RATE
+            <= self.learning_rate
+            <= DExperiment.MAX_LEARNING_RATE
+        ):
+            raise ValueError(
+                "learning_rate must be between "
+                f"{DExperiment.MIN_LEARNING_RATE} and "
+                f"{DExperiment.MAX_LEARNING_RATE}"
+            )
         if not 0 <= self.epsilon_min <= self.epsilon_start <= 1:
             raise ValueError("epsilon values must satisfy 0 <= min <= start <= 1")
         if not 0 < self.epsilon_decay <= 1:

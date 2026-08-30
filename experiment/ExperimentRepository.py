@@ -17,6 +17,8 @@ class ExperimentRepository(Protocol):
     def initialize(self) -> None: ...
     def mark_interrupted(self) -> None: ...
     def allocate_seed(self) -> int: ...
+    def load_config(self) -> dict[str, Any] | None: ...
+    def save_config(self, config: dict[str, Any]) -> None: ...
     def create(self, experiment_id: str, config: dict[str, Any]) -> None: ...
     def mark_running(self, experiment_id: str) -> None: ...
     def finish(
@@ -67,6 +69,17 @@ class MariaDBExperimentRepository:
                 CREATE TABLE IF NOT EXISTS experiment_seed_sequence (
                     sequence_name VARCHAR(32) PRIMARY KEY,
                     next_seed BIGINT UNSIGNED NOT NULL
+                ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS experiment_configuration (
+                    config_name VARCHAR(32) PRIMARY KEY,
+                    config_json LONGTEXT NOT NULL,
+                    updated_at DATETIME(6) NOT NULL
+                        DEFAULT CURRENT_TIMESTAMP(6)
+                        ON UPDATE CURRENT_TIMESTAMP(6)
                 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
                 """
             )
@@ -140,6 +153,29 @@ class MariaDBExperimentRepository:
                 connection.rollback()
                 raise
         return seed
+
+    def load_config(self) -> dict[str, Any] | None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT config_json
+                FROM experiment_configuration
+                WHERE config_name = 'active'
+                """
+            )
+            row = cursor.fetchone()
+        return json.loads(row["config_json"]) if row is not None else None
+
+    def save_config(self, config: dict[str, Any]) -> None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO experiment_configuration (config_name, config_json)
+                VALUES ('active', %s)
+                ON DUPLICATE KEY UPDATE config_json = VALUES(config_json)
+                """,
+                (json.dumps(config, separators=(",", ":")),),
+            )
 
     def create(self, experiment_id: str, config: dict[str, Any]) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
