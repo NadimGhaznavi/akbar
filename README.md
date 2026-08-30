@@ -24,6 +24,16 @@ Akbar service unless requested:
 sudo python3 scripts/install.py --enable --start
 ```
 
+Use the trusted menu-driven experiment interface after installation:
+
+```sh
+/opt/akbar/bin/akbar-cli
+```
+
+The CLI talks directly to the experiment service, displays only the final four
+characters of experiment IDs, and provides DB-backed experiment counts and
+completed results without language-model interpretation.
+
 Use an alternate prefix without installing the systemd unit for testing:
 
 ```sh
@@ -33,17 +43,18 @@ python3 scripts/install.py \
     --skip-dependencies
 ```
 
-## Updates
+## Upgrades
 
-Reinstall the current checkout and restart the service:
+Upgrade from the current checkout and restart the services:
 
 ```sh
-sudo python3 scripts/reinstall.py
+sudo python3 scripts/upgrade.py
 ```
 
-This is a destructive reinstall. It deletes all existing experiments, database
-credentials, installed files, and service enablement state before recreating
-Akbar and restarting its services.
+Upgrade replaces the installed runtime and updates its dependencies and systemd
+units. The MariaDB database, experiment records, database account, credentials,
+virtual environment, service account, and service enablement state are
+preserved.
 
 ## Uninstallation
 

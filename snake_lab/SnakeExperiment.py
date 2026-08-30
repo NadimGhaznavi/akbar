@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
 import random
 import statistics
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import numpy as np
@@ -17,7 +17,6 @@ from snake_lab.game.SnakeGame import SnakeGame
 from snake_lab.models.LinearQModel import LinearQModel
 from snake_lab.training.QTrainer import QTrainer, Transition
 from snake_lab.training.ReplayMemory import ReplayMemory
-
 
 TelemetryCallback = Callable[[dict[str, Any]], Awaitable[None]]
 

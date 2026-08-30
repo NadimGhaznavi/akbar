@@ -8,7 +8,6 @@ from typing import Any
 
 from experiment.ExperimentConfig import ExperimentConfig
 
-
 TelemetryCallback = Callable[[dict[str, Any]], Awaitable[None]]
 
 

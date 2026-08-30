@@ -37,7 +37,7 @@ class ExperimentClient:
         )
         context = zmq.Context.instance()
         socket = context.socket(zmq.DEALER)
-        socket.setsockopt(zmq.IDENTITY, f"akbar-tool-{uuid4()}".encode("utf-8"))
+        socket.setsockopt(zmq.IDENTITY, f"akbar-tool-{uuid4()}".encode())
         socket.setsockopt(zmq.LINGER, 0)
         socket.connect(self.endpoint)
         try:

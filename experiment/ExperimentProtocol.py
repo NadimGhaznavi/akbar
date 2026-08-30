@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-import json
 from typing import Any
 from uuid import uuid4
 
@@ -22,6 +22,8 @@ class MessageType(StrEnum):
     EXPERIMENT_RESULT = "experiment_result"
     GET_EXPERIMENT_COUNT = "get_experiment_count"
     EXPERIMENT_COUNT = "experiment_count"
+    RESOLVE_EXPERIMENT_ID = "resolve_experiment_id"
+    EXPERIMENT_ID_RESOLVED = "experiment_id_resolved"
     GET_CURRENT_HIGHSCORE = "get_current_highscore"
     CURRENT_HIGHSCORE = "current_highscore"
     STOP_EXPERIMENT = "stop_experiment"
@@ -60,7 +62,7 @@ class ExperimentMessage:
         return json.dumps(self.to_dict(), separators=(",", ":")).encode("utf-8")
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ExperimentMessage":
+    def from_dict(cls, data: dict[str, Any]) -> ExperimentMessage:
         if not isinstance(data, dict):
             raise ProtocolError("message must be a JSON object")
         version = data.get("protocol_version")
@@ -90,7 +92,7 @@ class ExperimentMessage:
         )
 
     @classmethod
-    def from_json(cls, data: bytes) -> "ExperimentMessage":
+    def from_json(cls, data: bytes) -> ExperimentMessage:
         try:
             decoded = json.loads(data.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -102,7 +104,7 @@ class ExperimentMessage:
         message_type: MessageType,
         payload: dict[str, Any] | None = None,
         experiment_id: str | None = None,
-    ) -> "ExperimentMessage":
+    ) -> ExperimentMessage:
         return ExperimentMessage(
             message_type=message_type,
             payload=payload or {},

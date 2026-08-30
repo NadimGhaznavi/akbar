@@ -9,20 +9,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.2] - 2026-08-30 @ 01:55
+## [0.6.0] - 2026-08-30 @ 02:14
 
-## [0.5.1] - 2026-08-30 @ 01:48
+### Changed
+
+- Replaced destructive reinstallation with a dedicated upgrade workflow that
+  preserves MariaDB data, experiment history, database credentials, service
+  identity, virtual environment, and service enablement state.
+
+### Added
+
+- Trusted menu-driven experiment CLI with direct control-plane access,
+  four-character ID display, safe suffix resolution, and DB-backed count and
+  result views.
+
+### Removed
+
+- Unused runtime-configuration parsing, duplicate endpoint constants, and an
+  unreferenced state-store accessor.
 
 ---
 
-## [0.5.1] - 2026-08-30 @ 01:33
+## [0.5.2] - 2026-08-30 @ 01:55
+
+### Changed
+
+- Made installation, reinstallation, and uninstallation explicitly destructive:
+  existing application files, services, credentials, and MariaDB data are
+  removed rather than preserved.
+
+---
+
+## [0.5.1] - 2026-08-30 @ 01:48
+
+### Added
+
+- MCP experiment-count tool backed by persisted MariaDB experiment records.
+
+---
+
+## [0.5.0] - 2026-08-30 @ 01:33
+
+### Added
+
+- Headless deterministic Snake gameplay with an in-memory NumPy Q-model,
+  bounded replay training, and real per-epoch score and loss telemetry.
+
+---
+
+## [0.4.0] - 2026-08-30 @ 01:13
 
 ### Changed
 
 - Moved MariaDB settings into a dedicated database constants class.
-- Made installation, reinstallation, and uninstallation explicitly destructive:
-  existing application files, services, credentials, and MariaDB data are
-  removed rather than preserved.
 - Replaced the experiment-service stub with an end-to-end, versioned ZMQ control
   plane and a deterministic first experiment runner.
 - Limited experiment starts to the service-owned fixed default configuration;
@@ -38,9 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration tests, and experiment architecture documentation.
 - Versioned run-result documents stored and retrieved by experiment ID, with
   resolved configuration, aggregate metrics, and timing information.
-- Headless deterministic Snake gameplay with an in-memory NumPy Q-model,
-  bounded replay training, and real per-epoch score and loss telemetry.
-- MCP experiment-count tool backed by persisted MariaDB experiment records.
 
 ---
 

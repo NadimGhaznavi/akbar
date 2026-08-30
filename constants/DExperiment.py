@@ -15,5 +15,3 @@ class DExperiment:
 
     CONTROL_ENDPOINT: Final[str] = f"tcp://{CONTROL_HOST}:{CONTROL_PORT}"
     TELEMETRY_ENDPOINT: Final[str] = f"tcp://{TELEMETRY_HOST}:{TELEMETRY_PORT}"
-    CONTROL_BIND_ENDPOINT: Final[str] = f"tcp://{CONTROL_HOST}:{CONTROL_PORT}"
-    TELEMETRY_BIND_ENDPOINT: Final[str] = f"tcp://{TELEMETRY_HOST}:{TELEMETRY_PORT}"
