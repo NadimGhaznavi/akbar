@@ -141,7 +141,7 @@ confirm_release() {
 
 update_changelog() {
     local release_date temp_file
-    release_date=$(date -u '+%Y-%m-%d')
+    release_date=$(date '+%Y-%m-%d @ %H:%M')
     temp_file=$(mktemp "${PROJECT_DIR}/.CHANGELOG.md.XXXXXX")
 
     awk -v heading="## [${NEW_VERSION}] - ${release_date}" '
