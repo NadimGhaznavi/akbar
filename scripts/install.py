@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import grp
 import os
-from pathlib import Path
 import pwd
 import secrets
 import shutil
@@ -15,14 +14,13 @@ import subprocess
 import sys
 import tempfile
 import venv
-
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from constants.DAkbar import DAkbar  # noqa: E402
 from constants.DDatabase import DDatabase  # noqa: E402
-
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 APPLICATION_FILES = (
@@ -93,6 +91,7 @@ APPLICATION_FILES = (
         Path("snake_lab/training/ReplayMemory.py"),
     ),
     (Path("tools/tools.py"), Path("tools.py")),
+    (Path("tools/cli.py"), Path("bin/akbar-cli")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
 
@@ -315,7 +314,7 @@ def install_application(prefix: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
         destination.parent.chmod(0o755)
         shutil.copy2(source, destination)
-        destination.chmod(0o644)
+        destination.chmod(0o755 if destination_path == Path("bin/akbar-cli") else 0o644)
 
     for relative_path in DEPENDENCY_FILES:
         source = PROJECT_ROOT / relative_path

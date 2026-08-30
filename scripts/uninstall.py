@@ -5,19 +5,17 @@ from __future__ import annotations
 
 import grp
 import os
-from pathlib import Path
 import pwd
 import shutil
 import subprocess
 import sys
-
+from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from constants.DAkbar import DAkbar  # noqa: E402
 from constants.DDatabase import DDatabase  # noqa: E402
-
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 

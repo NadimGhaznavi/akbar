@@ -5,8 +5,8 @@ import random
 import unittest
 
 from experiment.ExperimentConfig import ExperimentConfig
-from snake_lab.SnakeExperiment import SnakeExperiment
 from snake_lab.game.SnakeGame import SnakeGame
+from snake_lab.SnakeExperiment import SnakeExperiment
 
 
 class SnakeGameTest(unittest.TestCase):
