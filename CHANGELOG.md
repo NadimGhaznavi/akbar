@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-08-30 @ 04:03
+
+### Changed
+
+- Increased the llama.cpp context window to 32,768 tokens and capped Qwen's
+  reasoning phase at 2,048 tokens to preserve room for conversation, tool calls,
+  and final responses.
+
+---
+
 ## [0.8.0] - 2026-08-30 @ 03:39
 
 ### Changed
