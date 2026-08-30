@@ -338,7 +338,10 @@ class ExperimentServer:
             if data is None:
                 raise ProtocolError("experiment not found")
         else:
-            raise ProtocolError("no experiment is available")
+            return request.reply(
+                MessageType.EXPERIMENT_STATUS,
+                {"status": ExperimentStatus.READY.value},
+            )
         return request.reply(
             MessageType.EXPERIMENT_STATUS,
             data,

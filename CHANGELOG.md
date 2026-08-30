@@ -9,11 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-08-30 @ 05:46
+
+### Changed
+
+- Made an empty experiment service report authoritative `ready` status instead
+  of raising a tool error during Akbar's initial state check.
+
+---
+
 ## [0.10.3] - 2026-08-30 @ 05:38
+
+### Changed
+
+- Made the administrative CLI a strictly read-only observability interface and
+  added active-configuration and recent-result views.
+
+---
 
 ## [0.10.2] - 2026-08-30 @ 05:31
 
+### Changed
+
+- Set scheduler startup and recurring continuation checks to 15 seconds, with
+  MariaDB duplicate suppression preventing queued agent-turn buildup.
+
+---
+
 ## [0.10.1] - 2026-08-30 @ 05:21
+
+### Changed
+
+- Restored llama-server MCP access for interactive web chat while retaining the
+  independent agent worker for scheduled MCP orchestration.
+
+---
 
 ## [0.10.0] - 2026-08-30 @ 05:14
 
@@ -30,19 +60,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Split the monolithic MCP tool file into project, documentation, experiment,
   and server modules with a package-based launch entry point.
-- Moved scheduled MCP orchestration into the independent agent worker while
-  retaining llama-server MCP access for interactive web chat.
+- Moved scheduled MCP orchestration into the independent agent worker.
 - Centralized MariaDB connection construction for experiment persistence and
   durable process coordination.
 - Encoded an evidence-driven scheduled workflow that checks active work,
   reviews historical results, justifies configuration changes, starts at most
   one experiment, and persists the decision rationale with the agent turn.
-- Set scheduler startup and recurring continuation checks to 15 seconds, with
-  MariaDB duplicate suppression preventing queued agent-turn buildup.
 - Exposed a concise operational architecture guide through Akbar's numbered MCP
   self-documentation tools.
-- Made the administrative CLI a strictly read-only observability interface and
-  added active-configuration and recent-result views.
 
 ### Removed
 

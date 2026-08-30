@@ -39,6 +39,7 @@ class MessageType(StrEnum):
 
 
 class ExperimentStatus(StrEnum):
+    READY = "ready"
     QUEUED = "queued"
     RUNNING = "running"
     COMPLETED = "completed"

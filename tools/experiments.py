@@ -45,7 +45,8 @@ def set_experiment_learning_rate(learning_rate: float) -> dict:
 def get_experiment_status(experiment_id: str = "") -> dict:
     """Return live or persisted status for an experiment.
 
-    With no ID, returns the most recent experiment held by the service.
+    With no ID, returns the most recent experiment held by the service or
+    ``ready`` when no experiment has run since startup.
     """
     return ExperimentClient().request(
         MessageType.GET_EXPERIMENT_STATUS,
