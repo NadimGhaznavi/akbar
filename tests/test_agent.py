@@ -53,6 +53,14 @@ class ExperimentTools:
             {
                 "type": "function",
                 "function": {
+                    "name": "get_experiment_status",
+                    "description": "Get experiment status.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "start_experiment",
                     "description": "Start an experiment.",
                     "parameters": {"type": "object", "properties": {}},
@@ -62,6 +70,11 @@ class ExperimentTools:
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
         self.calls.append((name, arguments))
+        if name == "get_experiment_status":
+            return {
+                "isError": False,
+                "structuredContent": {"result": {"status": "ready"}},
+            }
         return {
             "isError": False,
             "structuredContent": {
@@ -190,6 +203,29 @@ class AgentTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(
             "call start_experiment",
             chat.requests[1]["messages"][-1]["content"],
+        )
+
+    async def test_scheduled_turn_forces_start_after_investigation_budget(self) -> None:
+        chat = FakeChat(
+            [
+                chat_response({"content": "Still investigating."})
+                for _ in range(3)
+            ]
+        )
+        tools = ExperimentTools()
+
+        result = await AkbarAgent(chat, tools).run(
+            "Continue.",
+            require_experiment_resolution=True,
+        )
+
+        self.assertEqual(
+            result,
+            "Scheduled investigation budget expired; started one experiment.",
+        )
+        self.assertEqual(
+            tools.calls,
+            [("get_experiment_status", {}), ("start_experiment", {})],
         )
 
 

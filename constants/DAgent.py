@@ -10,6 +10,8 @@ class DAgent:
     MODEL_NAME: Final[str] = "akbar"
     MAX_TOOL_ROUNDS: Final[int] = 8
     MAX_TOOL_CALLS: Final[int] = 20
+    SCHEDULED_INVESTIGATION_ROUNDS: Final[int] = 3
+    MAX_COMPLETION_TOKENS: Final[int] = 512
     CHAT_TIMEOUT_SECONDS: Final[int] = 300
     TURN_TIMEOUT_SECONDS: Final[int] = 1_800
     POLL_INTERVAL_SECONDS: Final[int] = 5
