@@ -27,4 +27,4 @@ class DAkbar:
     CONTEXT_SIZE: Final[int] = 16_384
     HOST: Final[str] = "0.0.0.0"
     PORT: Final[int] = 51970
-    VERSION: Final[str] = "0.2.3"
+    VERSION: Final[str] = "0.3.0"
