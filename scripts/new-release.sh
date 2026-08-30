@@ -16,6 +16,8 @@ readonly CONSTANTS_FILE="${PROJECT_DIR}/constants/DAkbar.py"
 
 CURRENT_BRANCH=""
 NEW_VERSION=""
+RELEASE_DESCRIPTION=""
+RELEASE_MESSAGE=""
 NEXT_FEATURE_BRANCH=""
 TAG_NAME=""
 
@@ -25,11 +27,23 @@ warn() { printf '[WARNING] %s\n' "$*"; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
 usage() {
+    local current_version=""
+    local likely_version="0.1.0"
+
+    if [[ -f "${CONSTANTS_FILE}" ]]; then
+        current_version=$(sed -nE 's/^    VERSION: Final\[str\] = "([^"]+)"$/\1/p' "${CONSTANTS_FILE}")
+    fi
+    if [[ "${current_version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+        likely_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((10#${BASH_REMATCH[3]} + 1))"
+    fi
+
     cat <<EOF
-Usage: $(basename -- "$0") <version> <next-feature-branch>
+Usage: $(basename -- "$0") <version> <message> <next-feature-branch>
+
+Likely next version: ${likely_version}
 
 Example:
-  $(basename -- "$0") 0.1.0 feat/bootstrap-0.1.1
+  $(basename -- "$0") ${likely_version} "Initial release" feat/next
 
 Run this from a clean feat/* or feature/* branch. The script updates the
 changelog, merges the feature through dev to main, creates an annotated vX.Y.Z
@@ -42,14 +56,17 @@ ref_exists() {
 }
 
 validate_arguments() {
-    [[ $# -eq 2 ]] || { usage >&2; exit 2; }
+    [[ $# -eq 3 ]] || { usage >&2; exit 2; }
 
     NEW_VERSION=$1
-    NEXT_FEATURE_BRANCH=$2
+    RELEASE_DESCRIPTION=$2
+    RELEASE_MESSAGE="Release ${NEW_VERSION}: ${RELEASE_DESCRIPTION}"
+    NEXT_FEATURE_BRANCH=$3
     TAG_NAME="v${NEW_VERSION}"
 
     [[ "${NEW_VERSION}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]] ||
         die "Version must be a semantic version without a leading v."
+    [[ -n "${RELEASE_DESCRIPTION}" ]] || die "Release message must not be empty."
     [[ "${NEXT_FEATURE_BRANCH}" == feat/* || "${NEXT_FEATURE_BRANCH}" == feature/* ]] ||
         die "Next feature branch must start with feat/ or feature/."
     git check-ref-format --branch "${NEXT_FEATURE_BRANCH}" >/dev/null ||
@@ -110,6 +127,7 @@ confirm_release() {
     printf '\nRelease summary:\n'
     printf '  Source:       %s\n' "${CURRENT_BRANCH}"
     printf '  Tag:          %s\n' "${TAG_NAME}"
+    printf '  Message:      %s\n' "${RELEASE_MESSAGE}"
     printf '  Next branch:  %s\n' "${NEXT_FEATURE_BRANCH}"
     printf '  Remote:       %s\n\n' "$(git remote get-url "${REMOTE}")"
 
@@ -178,8 +196,8 @@ create_release() {
     update_changelog
 
     git switch "${MAIN_BRANCH}"
-    merge_no_ff "${DEV_BRANCH}" "Release ${TAG_NAME}"
-    git tag -a "${TAG_NAME}" -m "Akbar ${TAG_NAME}"
+    merge_no_ff "${DEV_BRANCH}" "${RELEASE_MESSAGE}"
+    git tag -a "${TAG_NAME}" -m "${RELEASE_MESSAGE}"
 
     git switch "${DEV_BRANCH}"
     git merge --ff-only "${MAIN_BRANCH}"
