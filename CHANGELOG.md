@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replaced the ineffective OpenAI request-level reasoning budget with Qwen's
+  supported `enable_thinking=false` chat-template control for scheduled
+  schema-only planning responses.
+
+---
+
 ## [0.11.2] - 2026-08-30 @ 06:45
 
 ### Changed

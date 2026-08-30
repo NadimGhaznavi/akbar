@@ -13,7 +13,6 @@ class DScheduler:
     MODEL_NAME: Final[str] = "akbar"
     CHAT_TIMEOUT_SECONDS: Final[int] = 120
     MAX_COMPLETION_TOKENS: Final[int] = 512
-    REASONING_BUDGET: Final[int] = 0
     SYSTEM_PROMPT: Final[str] = (
         "You design the next AI Snake Lab learning-rate experiment. Review the "
         "provided previous experiments, compare their configurations and score "
