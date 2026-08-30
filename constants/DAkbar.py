@@ -19,7 +19,7 @@ class DAkbar:
         "/opt/dev/models/quantized/Qwen3.5-4B-Q4_K_M.gguf"
     )
     MCP_SERVERS_CONFIG: Final[Path] = INSTALL_ROOT / "server" / "mcp.json"
-    CONTEXT_SIZE: Final[int] = 16_384
+    CONTEXT_SIZE: Final[int] = 32_768
     HOST: Final[str] = "0.0.0.0"
     PORT: Final[int] = 51970
     VERSION: Final[str] = "0.8.0"
