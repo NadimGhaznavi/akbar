@@ -133,6 +133,11 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
     async def request(self, message_type: MessageType, **kwargs) -> dict[str, Any]:
         return await asyncio.to_thread(self.client.request, message_type, **kwargs)
 
+    async def test_fresh_service_reports_ready(self) -> None:
+        status = await self.request(MessageType.GET_EXPERIMENT_STATUS)
+
+        self.assertEqual(status, {"status": "ready"})
+
     async def test_complete_experiment_control_flow(self) -> None:
         pong = await self.request(MessageType.PING)
         self.assertEqual(pong["service"], "akbar-experimentd")
