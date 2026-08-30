@@ -39,12 +39,19 @@ Starting an experiment must:
 1. Confirm that no experiment is active.
 2. Confirm that the previous terminal experiment has been acknowledged.
 3. Atomically reserve the next seed from MariaDB.
-4. Resolve the fixed experiment configuration with that seed.
+4. Resolve the persisted active experiment configuration with that seed.
 5. Create the experiment record and assign its ID.
 6. Start the in-memory runner.
 
 Start requests are never queued. Repeated requests received while the service
 is not ready must be rejected.
+
+## Configuration boundary
+
+The active configuration is stored in MariaDB and loaded when the experiment
+service starts. MCP tools may set the epoch count from 50 through 100,000 and the
+learning rate from 0.000001 through 0.1. Configuration changes are rejected
+while an experiment is queued or running and affect only subsequent runs.
 
 ## Running boundary
 
@@ -83,6 +90,8 @@ through the administrative CLI remain to be implemented.
 - At most one experiment is queued or running.
 - Every accepted experiment has a durable ID, unique assigned seed, and
   configuration record before execution begins.
+- Every configuration change is validated and persisted before it becomes
+  active.
 - Database access never enters the simulation hot loop.
 - A result is factual runner output; evaluation is outside the current ELC.
 - Full experiment IDs remain internal to the CLI, which displays four-character

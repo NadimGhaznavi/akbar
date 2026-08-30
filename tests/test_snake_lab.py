@@ -10,6 +10,11 @@ from snake_lab.SnakeExperiment import SnakeExperiment
 
 
 class SnakeGameTest(unittest.TestCase):
+    def test_experiment_defaults_match_the_working_configuration(self) -> None:
+        config = ExperimentConfig()
+        self.assertEqual(config.epochs, 50)
+        self.assertEqual(config.learning_rate, 0.001)
+
     def test_seed_reproduces_initial_state_and_food(self) -> None:
         first = SnakeGame(8, 10, random.Random(1970))
         second = SnakeGame(8, 10, random.Random(1970))
@@ -31,7 +36,7 @@ class SnakeGameTest(unittest.TestCase):
 class SnakeExperimentTest(unittest.IsolatedAsyncioTestCase):
     async def test_fixed_seed_produces_repeatable_metrics(self) -> None:
         config = ExperimentConfig(
-            epochs=4,
+            epochs=50,
             seed=11,
             board_size=8,
             max_moves_multiplier=10,

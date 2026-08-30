@@ -22,7 +22,8 @@ layout: single
   results by experiment ID. It also atomically assigns an incrementing seed to
   each new experiment.
 - **Snake runner (`snake_lab`)** — Runs the headless game, NumPy Q-model, and
-  bounded replay training entirely in memory with a fixed configuration.
+  bounded replay training entirely in memory with a persisted, bounded
+  configuration.
 
 ## Boundaries
 
