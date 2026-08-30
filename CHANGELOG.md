@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Independent scheduler and agent-worker services coordinated through a durable
+  MariaDB turn queue, with atomic duplicate suppression, bounded polling and
+  execution, clean interruption, and persisted outcomes.
+- An explicit bounded function-calling loop that discovers MCP tools, sends
+  their schemas to llama.cpp, validates model tool calls, executes them through
+  MCP, and returns tool results to the model until a final response.
+
+### Changed
+
+- Split the monolithic MCP tool file into project, documentation, experiment,
+  and server modules with a package-based launch entry point.
+- Made llama.cpp inference-only and moved MCP orchestration into the independent
+  agent worker.
+- Centralized MariaDB connection construction for experiment persistence and
+  durable process coordination.
+- Encoded an evidence-driven scheduled workflow that checks active work,
+  reviews historical results, justifies configuration changes, starts at most
+  one experiment, and persists the decision rationale with the agent turn.
+- Exposed a concise operational architecture guide through Akbar's numbered MCP
+  self-documentation tools.
+
+### Removed
+
+- The installed top-level `tools.py` compatibility entry point.
+- The obsolete llama.cpp MCP configuration file and server flag.
+
+---
+
 ## [0.9.0] - 2026-08-30 @ 04:11
 
 ### Added

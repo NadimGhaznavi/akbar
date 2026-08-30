@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "akbar": {
-      "command": "/opt/akbar/.venv/bin/python",
-      "args": ["/opt/akbar/tools.py"]
-    }
-  }
-}

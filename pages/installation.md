@@ -38,8 +38,8 @@ The installer then performs the following operations:
 5. Creates the `'akbar'@'localhost'` database account and grants it privileges
    only on `akbar.*`.
 6. Generates and stores the database connection credentials.
-7. Installs the Akbar model and experiment systemd services and reloads
-   systemd.
+7. Installs the Akbar model, experiment, agent worker, and scheduler systemd
+   services and reloads systemd.
 
 Installation alone does not enable or start Akbar. To do both during
 installation, run:
@@ -48,6 +48,13 @@ installation, run:
 sudo python3 scripts/install.py --enable --start
 ```
 
+The scheduler waits 60 seconds after startup and then attempts to enqueue a
+continuation turn once per hour. MariaDB rejects the tick when a turn is already
+queued or running. The independent agent worker polls for queued work every five
+seconds and gives each turn a 30-minute deadline. These defaults can be
+overridden through the corresponding `AKBAR_SCHEDULER_*` and `AKBAR_AGENT_*`
+unit environment variables.
+
 ## Installed files
 
 The application and its virtual environment are installed under `/opt/akbar`:
@@ -55,8 +62,12 @@ The application and its virtual environment are installed under `/opt/akbar`:
 ```text
 /opt/akbar/
 ├── .venv/
+├── agent/
 ├── constants/
+├── database/
 ├── experiment/
+├── orchestration/
+├── scheduler/
 ├── scripts/
 │   ├── akbar-cli.py
 │   ├── install.py
@@ -64,7 +75,7 @@ The application and its virtual environment are installed under `/opt/akbar`:
 ├── server/
 ├── snake_lab/
 ├── requirements.txt
-└── tools.py
+└── tools/
 ```
 
 ## Experiment CLI
@@ -89,6 +100,8 @@ The systemd units are installed separately:
 ```text
 /etc/systemd/system/akbar.service
 /etc/systemd/system/akbar-experimentd.service
+/etc/systemd/system/akbar-agentd.service
+/etc/systemd/system/akbar-scheduler.service
 ```
 
 ## Database credentials
