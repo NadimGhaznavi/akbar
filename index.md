@@ -20,4 +20,5 @@ to run a capable model on modest, readily available GPU hardware.
 - [GPU driver and llama.cpp setup]({{ '/pages/driver-setup.html' | relative_url }})
 - [Model setup]({{ '/pages/model-setup.html' | relative_url }})
 - [Akbar installation and service management]({{ '/pages/installation.html' | relative_url }})
+- [Architecture and experiment control plane]({{ '/pages/architecture.html' | relative_url }})
 - [Interactive CLI]({{ '/pages/interactive-cli.html' | relative_url }})

@@ -9,12 +9,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-30 @ 01:13
+
+### Changed
+
+- Moved MariaDB settings into a dedicated database constants class.
+- Replaced the experiment-service stub with an end-to-end, versioned ZMQ control
+  plane and a deterministic first experiment runner.
+- Limited experiment starts to the service-owned fixed default configuration;
+  runtime configuration loading is intentionally deferred.
+- Kept live experiment state and per-epoch telemetry in memory, with MariaDB
+  persistence confined to lifecycle boundaries outside the simulation hot loop.
+
+### Added
+
+- MCP tools to start, inspect, stop, and health-check experiments, including a
+  database-free current-highscore query.
+- MariaDB experiment lifecycle records, non-blocking ZMQ PUB telemetry, service
+  integration tests, and experiment architecture documentation.
+- Versioned run-result documents stored and retrieved by experiment ID, with
+  resolved configuration, aggregate metrics, and timing information.
+
+---
+
 ## [0.3.0] - 2026-08-30 @ 00:24
 
 ### Added
 
 - MCP project-information tool providing Akbar's purpose, version, and
   administrator name.
+
+---
 
 ## [0.2.3] - 2026-08-30 @ 00:19
 
