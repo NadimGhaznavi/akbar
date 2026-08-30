@@ -53,6 +53,9 @@ class MemoryRepository:
     def get(self, experiment_id: str) -> dict[str, Any] | None:
         return self.records.get(experiment_id)
 
+    def count(self) -> int:
+        return len(self.records)
+
 
 def unused_tcp_endpoint() -> str:
     with socket.socket() as candidate:
@@ -184,6 +187,13 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
                 MessageType.START_EXPERIMENT,
                 payload={"epochs": 1},
             )
+
+    async def test_experiment_count_uses_persisted_records(self) -> None:
+        initial = await self.request(MessageType.GET_EXPERIMENT_COUNT)
+        self.assertEqual(initial["experiment_count"], 0)
+        await self.request(MessageType.START_EXPERIMENT)
+        counted = await self.request(MessageType.GET_EXPERIMENT_COUNT)
+        self.assertEqual(counted["experiment_count"], 1)
 
 
 if __name__ == "__main__":

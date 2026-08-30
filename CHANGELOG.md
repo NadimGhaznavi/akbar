@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-08-30 @ 01:33
+---
 
-## [0.4.0] - 2026-08-30 @ 01:13
+## [0.5.1] - 2026-08-30 @ 01:33
 
 ### Changed
 
@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolved configuration, aggregate metrics, and timing information.
 - Headless deterministic Snake gameplay with an in-memory NumPy Q-model,
   bounded replay training, and real per-epoch score and loss telemetry.
+- MCP experiment-count tool backed by persisted MariaDB experiment records.
 
 ---
 

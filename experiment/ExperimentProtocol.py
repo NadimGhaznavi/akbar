@@ -20,6 +20,8 @@ class MessageType(StrEnum):
     EXPERIMENT_STATUS = "experiment_status"
     GET_EXPERIMENT_RESULT = "get_experiment_result"
     EXPERIMENT_RESULT = "experiment_result"
+    GET_EXPERIMENT_COUNT = "get_experiment_count"
+    EXPERIMENT_COUNT = "experiment_count"
     GET_CURRENT_HIGHSCORE = "get_current_highscore"
     CURRENT_HIGHSCORE = "current_highscore"
     STOP_EXPERIMENT = "stop_experiment"
