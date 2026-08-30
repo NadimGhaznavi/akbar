@@ -18,8 +18,8 @@ The agent is Akbar.
 # Links
 
 - Akbar's underlying LLM uses the [Qwen 3-4B](https://qwen.readthedocs.io/en/latest/) model
-- [GPU Driver Setup](/pages/driver-setup/)
-- [Model Setup](/pages/model-setup/)
-- [Interactive CLI](/pages/interactive-cli/)
+- [GPU Driver Setup](/pages/driver-setup.html)
+- [Model Setup](/pages/model-setup.html)
+- [Interactive CLI](/pages/interactive-cli.html)
 
 
