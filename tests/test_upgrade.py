@@ -16,6 +16,7 @@ class UpgradeBoundaryTest(unittest.TestCase):
         self.assertIn(Path("scripts/upgrade.py"), destinations)
         self.assertIn(Path("scheduler/SchedulerServer.py"), destinations)
         self.assertIn(Path("scheduler/PlanningRepository.py"), destinations)
+        self.assertIn(Path("experiment/ExperimentDesign.py"), destinations)
         self.assertNotIn(Path("agent/AgentServer.py"), destinations)
         self.assertNotIn(Path("orchestration/TurnRepository.py"), destinations)
         self.assertIn(Path("tools/__main__.py"), destinations)
