@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-08-30 @ 06:04
+
 ### Changed
 
 - Required scheduled agent turns to confirm active work or successfully start an
