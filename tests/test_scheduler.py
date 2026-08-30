@@ -15,31 +15,30 @@ from scheduler.SchedulerServer import (
 
 
 class FakeHTTPResponse:
+    def __init__(self, content: Any) -> None:
+        self.content = content
+
     def raise_for_status(self) -> None:
         pass
 
     def json(self) -> dict[str, Any]:
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "content": (
-                            '{"epochs":50,"learning_rate":0.0008,'
-                            '"rationale":"Compare the previous run."}'
-                        )
-                    }
-                }
-            ]
-        }
+        return {"choices": [{"message": {"content": self.content}}]}
 
 
 class FakeHTTPClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        content: Any = (
+            '{"epochs":50,"learning_rate":0.0008,'
+            '"rationale":"Compare the previous run."}'
+        ),
+    ) -> None:
+        self.content = content
         self.requests: list[tuple[str, dict[str, Any]]] = []
 
     async def post(self, url: str, json: dict[str, Any]) -> FakeHTTPResponse:
         self.requests.append((url, json))
-        return FakeHTTPResponse()
+        return FakeHTTPResponse(self.content)
 
     async def aclose(self) -> None:
         pass
@@ -143,6 +142,19 @@ class SchedulerTest(unittest.TestCase):
         request = http.requests[0][1]
         self.assertEqual(request["response_format"]["type"], "json_schema")
         self.assertIn("previous_experiments", request["messages"][1]["content"])
+
+    def test_planner_accepts_fenced_json_from_llama(self) -> None:
+        http = FakeHTTPClient(
+            """```json
+{"epochs":50,"learning_rate":0.0008,"rationale":"Try a lower rate."}
+```"""
+        )
+        planner = LlamaPlanner(client=http)
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+
+        proposal = asyncio.run(planner.propose(config, []))
+
+        self.assertEqual(proposal.rationale, "Try a lower rate.")
 
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
         experiment = FakeExperimentControl()

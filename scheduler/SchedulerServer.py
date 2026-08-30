@@ -129,16 +129,62 @@ class LlamaPlanner:
             },
         )
         response.raise_for_status()
+        message: Any = None
         try:
-            content = response.json()["choices"][0]["message"]["content"]
-            proposal_data = json.loads(content)
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+            payload = response.json()
+            message = payload["choices"][0]["message"]
+            proposal_data = _decode_json_object(message.get("content"))
+        except (
+            KeyError,
+            IndexError,
+            TypeError,
+            json.JSONDecodeError,
+            PlanningError,
+        ) as error:
+            preview = None
+            if isinstance(message, dict):
+                preview = repr(message.get("content"))[:500]
+            LOGGER.error("invalid proposal response content: %s", preview)
             raise PlanningError(
                 "inference service returned invalid proposal JSON"
             ) from error
-        if not isinstance(proposal_data, dict):
-            raise PlanningError("inference proposal must be a JSON object")
         return ExperimentProposal.from_dict(proposal_data, config)
+
+
+def _decode_json_object(content: Any) -> dict[str, Any]:
+    if isinstance(content, list):
+        content = "".join(
+            item.get("text", "")
+            for item in content
+            if isinstance(item, dict) and item.get("type") == "text"
+        )
+    if not isinstance(content, str) or not content.strip():
+        raise PlanningError("proposal content is empty")
+
+    text = content.strip()
+    if text.startswith("```") and text.endswith("```"):
+        first_newline = text.find("\n")
+        text = text[first_newline + 1 : -3].strip()
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        candidates = []
+        for position, character in enumerate(text):
+            if character != "{":
+                continue
+            try:
+                candidate, _end = decoder.raw_decode(text[position:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                candidates.append(candidate)
+        if not candidates:
+            raise PlanningError("proposal content contains no JSON object")
+        decoded = candidates[-1]
+    if not isinstance(decoded, dict):
+        raise PlanningError("inference proposal must be a JSON object")
+    return decoded
 
 
 class Scheduler:
