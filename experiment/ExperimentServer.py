@@ -125,6 +125,8 @@ class ExperimentServer:
             return await self._status(request)
         if request.message_type is MessageType.GET_EXPERIMENT_RESULT:
             return await self._result(request)
+        if request.message_type is MessageType.GET_EXPERIMENT_COUNT:
+            return await self._count(request)
         if request.message_type is MessageType.GET_CURRENT_HIGHSCORE:
             return self._highscore(request)
         if request.message_type is MessageType.STOP_EXPERIMENT:
@@ -277,6 +279,13 @@ class ExperimentServer:
             MessageType.EXPERIMENT_RESULT,
             result,
             request.experiment_id,
+        )
+
+    async def _count(self, request: ExperimentMessage) -> ExperimentMessage:
+        count = await asyncio.to_thread(self.repository.count)
+        return request.reply(
+            MessageType.EXPERIMENT_COUNT,
+            {"experiment_count": count},
         )
 
     def _highscore(self, request: ExperimentMessage) -> ExperimentMessage:

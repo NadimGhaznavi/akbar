@@ -25,6 +25,7 @@ class ExperimentRepository(Protocol):
         error: str | None = None,
     ) -> None: ...
     def get(self, experiment_id: str) -> dict[str, Any] | None: ...
+    def count(self) -> int: ...
 
 
 class MariaDBExperimentRepository:
@@ -137,3 +138,9 @@ class MariaDBExperimentRepository:
                 row["completed_at"].isoformat() if row["completed_at"] else None
             ),
         }
+
+    def count(self) -> int:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) AS experiment_count FROM experiments")
+            row = cursor.fetchone()
+        return int(row["experiment_count"])
