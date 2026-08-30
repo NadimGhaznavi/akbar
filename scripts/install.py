@@ -8,9 +8,12 @@ import grp
 import os
 from pathlib import Path
 import pwd
+import secrets
 import shutil
+import string
 import subprocess
 import sys
+import tempfile
 import venv
 
 
@@ -27,6 +30,11 @@ APPLICATION_FILES = (
     (Path("server/__init__.py"), Path("server/__init__.py")),
     (Path("server/AkbarServer.py"), Path("server/AkbarServer.py")),
     (Path("server/mcp.json"), Path("server/mcp.json")),
+    (Path("experiment/__init__.py"), Path("experiment/__init__.py")),
+    (
+        Path("experiment/ExperimentServer.py"),
+        Path("experiment/ExperimentServer.py"),
+    ),
     (Path("tools/tools.py"), Path("tools.py")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
@@ -87,9 +95,11 @@ def validate_source(install_systemd_service: bool) -> None:
         if not source.is_file():
             raise FileNotFoundError(f"application file not found: {source}")
 
-    service_unit = PROJECT_ROOT / "systemd" / DAkbar.SERVICE_NAME
-    if install_systemd_service and not service_unit.is_file():
-        raise FileNotFoundError(f"systemd unit not found: {service_unit}")
+    if install_systemd_service:
+        for service_name in DAkbar.SERVICE_NAMES:
+            service_unit = PROJECT_ROOT / "systemd" / service_name
+            if not service_unit.is_file():
+                raise FileNotFoundError(f"systemd unit not found: {service_unit}")
 
 
 def ensure_service_account(prefix: Path) -> None:
@@ -112,6 +122,86 @@ def ensure_service_account(prefix: Path) -> None:
             "/usr/sbin/nologin",
             DAkbar.SERVICE_USER,
         )
+
+
+def read_database_password() -> str | None:
+    if not DAkbar.DATABASE_ENV_FILE.is_file():
+        return None
+    if DAkbar.DATABASE_ENV_FILE.is_symlink():
+        raise ValueError(f"refusing symlinked credential file: {DAkbar.DATABASE_ENV_FILE}")
+
+    values = {}
+    for line in DAkbar.DATABASE_ENV_FILE.read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+
+    password = values.get("AKBAR_DB_PASSWORD")
+    if not password:
+        raise ValueError(f"database password missing from {DAkbar.DATABASE_ENV_FILE}")
+    return password
+
+
+def write_database_environment(password: str) -> None:
+    DAkbar.CONFIG_DIRECTORY.mkdir(parents=True, exist_ok=True, mode=0o750)
+    DAkbar.CONFIG_DIRECTORY.chmod(0o750)
+    shutil.chown(
+        DAkbar.CONFIG_DIRECTORY,
+        user="root",
+        group=DAkbar.SERVICE_GROUP,
+    )
+
+    content = (
+        f"AKBAR_DB_HOST={DAkbar.DATABASE_HOST}\n"
+        f"AKBAR_DB_PORT={DAkbar.DATABASE_PORT}\n"
+        f"AKBAR_DB_NAME={DAkbar.DATABASE_NAME}\n"
+        f"AKBAR_DB_USER={DAkbar.DATABASE_USER}\n"
+        f"AKBAR_DB_PASSWORD={password}\n"
+    )
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=DAkbar.CONFIG_DIRECTORY,
+        prefix=".database.env.",
+        delete=False,
+    ) as temporary_file:
+        temporary_file.write(content)
+        temporary_path = Path(temporary_file.name)
+
+    temporary_path.chmod(0o640)
+    shutil.chown(temporary_path, user="root", group=DAkbar.SERVICE_GROUP)
+    temporary_path.replace(DAkbar.DATABASE_ENV_FILE)
+
+
+def provision_database() -> None:
+    mariadb = shutil.which("mariadb")
+    if mariadb is None:
+        raise FileNotFoundError(
+            "MariaDB client not found; install MariaDB server and client first"
+        )
+
+    password = read_database_password()
+    if password is None:
+        alphabet = string.ascii_letters + string.digits
+        password = "".join(secrets.choice(alphabet) for _ in range(48))
+
+    sql = f"""
+CREATE DATABASE IF NOT EXISTS `{DAkbar.DATABASE_NAME}`
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}'
+    IDENTIFIED BY '{password}';
+ALTER USER '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}'
+    IDENTIFIED BY '{password}';
+GRANT ALL PRIVILEGES ON `{DAkbar.DATABASE_NAME}`.*
+    TO '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}';
+"""
+    subprocess.run(
+        [mariadb, "--protocol=socket", "--batch"],
+        input=sql,
+        text=True,
+        check=True,
+    )
+    write_database_environment(password)
 
 
 def install_application(prefix: Path) -> None:
@@ -153,23 +243,26 @@ def install_environment(prefix: Path, skip_dependencies: bool) -> None:
         run(environment / "bin" / "python", "-m", "pip", "install", "-r", requirements)
 
 
-def install_service(prefix: Path, enable: bool, start: bool) -> None:
+def install_services(prefix: Path, enable: bool, start: bool) -> None:
     if prefix != DAkbar.INSTALL_ROOT:
         raise ValueError(
             "systemd installation requires the production prefix; use --no-service "
             "with an alternate prefix"
         )
 
-    source = PROJECT_ROOT / "systemd" / DAkbar.SERVICE_NAME
-    destination = SYSTEMD_DIRECTORY / DAkbar.SERVICE_NAME
-    shutil.copy2(source, destination)
-    destination.chmod(0o644)
+    for service_name in DAkbar.SERVICE_NAMES:
+        source = PROJECT_ROOT / "systemd" / service_name
+        destination = SYSTEMD_DIRECTORY / service_name
+        shutil.copy2(source, destination)
+        destination.chmod(0o644)
     run("systemctl", "daemon-reload")
 
     if enable:
-        run("systemctl", "enable", DAkbar.SERVICE_NAME)
+        for service_name in DAkbar.SERVICE_NAMES:
+            run("systemctl", "enable", service_name)
     if start:
-        run("systemctl", "restart", DAkbar.SERVICE_NAME)
+        for service_name in DAkbar.SERVICE_NAMES:
+            run("systemctl", "restart", service_name)
 
 
 def main() -> int:
@@ -187,21 +280,22 @@ def main() -> int:
 
         if prefix == DAkbar.INSTALL_ROOT:
             require_root()
-        if not args.no_service:
+        if prefix == DAkbar.INSTALL_ROOT:
             ensure_service_account(prefix)
+            provision_database()
 
         install_application(prefix)
         install_environment(prefix, args.skip_dependencies)
 
         if not args.no_service:
-            install_service(prefix, args.enable, args.start)
+            install_services(prefix, args.enable, args.start)
     except (FileNotFoundError, PermissionError, ValueError, subprocess.CalledProcessError) as error:
         print(f"install.py: {error}", file=sys.stderr)
         return 1
 
     print(f"Akbar installed in {prefix}")
     if not args.start and not args.no_service:
-        print(f"Start it with: systemctl start {DAkbar.SERVICE_NAME}")
+        print(f"Start it with: systemctl start {' '.join(DAkbar.SERVICE_NAMES)}")
     return 0
 
 

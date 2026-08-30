@@ -1,6 +1,7 @@
 [Unit]
-Description=Akbar Server
-After=network.target
+Description=Akbar Experiment Service
+After=network.target mariadb.service
+Wants=mariadb.service
 
 [Service]
 Type=simple
@@ -9,7 +10,7 @@ Group=akbar
 WorkingDirectory=/opt/akbar
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/etc/akbar/database.env
-ExecStart=/opt/akbar/.venv/bin/python -m server.AkbarServer
+ExecStart=/opt/akbar/.venv/bin/python -m experiment.ExperimentServer
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true
