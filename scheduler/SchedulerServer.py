@@ -125,7 +125,7 @@ class LlamaPlanner:
                     },
                 },
                 "max_tokens": DScheduler.MAX_COMPLETION_TOKENS,
-                "reasoning_budget": DScheduler.REASONING_BUDGET,
+                "chat_template_kwargs": {"enable_thinking": False},
                 "stream": False,
             },
         )
