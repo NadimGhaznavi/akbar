@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Protocol, Self
@@ -12,6 +13,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from constants.DAgent import DAgent
+
+LOGGER = logging.getLogger("akbar.agent")
 
 
 class AgentError(RuntimeError):
@@ -147,7 +150,12 @@ class AkbarAgent:
         self.max_tool_rounds = max_tool_rounds
         self.max_tool_calls = max_tool_calls
 
-    async def run(self, prompt: str) -> str:
+    async def run(
+        self,
+        prompt: str,
+        *,
+        require_experiment_resolution: bool = False,
+    ) -> str:
         tool_definitions = await self.tools.list_tools()
         allowed_tools = {
             definition["function"]["name"] for definition in tool_definitions
@@ -156,6 +164,7 @@ class AkbarAgent:
             {"role": "user", "content": prompt}
         ]
         total_calls = 0
+        experiment_resolved = False
 
         for _round in range(self.max_tool_rounds + 1):
             response = await self.chat.complete(messages, tool_definitions)
@@ -166,6 +175,29 @@ class AkbarAgent:
                 content = message.get("content")
                 if not isinstance(content, str) or not content.strip():
                     raise AgentError("model returned neither tool calls nor text")
+                if require_experiment_resolution and not experiment_resolved:
+                    if _round == self.max_tool_rounds:
+                        raise AgentError(
+                            "scheduled turn ended without starting or observing "
+                            "an active experiment"
+                        )
+                    LOGGER.warning(
+                        "scheduled turn attempted to finish without resolving "
+                        "the experiment state; requesting corrective action"
+                    )
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "The scheduled task is not complete: no queued or "
+                                "running experiment has been confirmed and no new "
+                                "experiment has been started. Continue using the "
+                                "available tools. If the service is idle, call "
+                                "start_experiment before giving your final response."
+                            ),
+                        }
+                    )
+                    continue
                 return content
 
             if _round == self.max_tool_rounds:
@@ -179,7 +211,15 @@ class AkbarAgent:
                     tool_call,
                     allowed_tools,
                 )
+                LOGGER.info("calling MCP tool %s", name)
                 result = await self.tools.call_tool(name, arguments)
+                if self._tool_succeeded(result):
+                    if name == "start_experiment":
+                        experiment_resolved = True
+                    elif name == "get_experiment_status":
+                        status = self._find_status(result)
+                        if status in {"queued", "running"}:
+                            experiment_resolved = True
                 messages.append(
                     {
                         "role": "tool",
@@ -189,6 +229,27 @@ class AkbarAgent:
                 )
 
         raise AgentError("model did not produce a final response")
+
+    @staticmethod
+    def _tool_succeeded(result: Any) -> bool:
+        return not isinstance(result, dict) or result.get("isError") is not True
+
+    @classmethod
+    def _find_status(cls, value: Any) -> str | None:
+        if isinstance(value, dict):
+            status = value.get("status")
+            if isinstance(status, str):
+                return status
+            for item in value.values():
+                found = cls._find_status(item)
+                if found is not None:
+                    return found
+        elif isinstance(value, list):
+            for item in value:
+                found = cls._find_status(item)
+                if found is not None:
+                    return found
+        return None
 
     @staticmethod
     def _assistant_message(response: dict[str, Any]) -> dict[str, Any]:

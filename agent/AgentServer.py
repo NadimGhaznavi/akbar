@@ -22,7 +22,12 @@ LOGGER = logging.getLogger("akbar.agentd")
 
 
 class AgentRunner(Protocol):
-    async def run(self, prompt: str) -> str: ...
+    async def run(
+        self,
+        prompt: str,
+        *,
+        require_experiment_resolution: bool = False,
+    ) -> str: ...
 
 
 class AgentWorker:
@@ -56,7 +61,10 @@ class AgentWorker:
         LOGGER.info("processing agent turn %s from %s", turn_id, turn["source"])
         try:
             async with asyncio.timeout(self.turn_timeout_seconds):
-                response = await self.agent.run(turn["prompt"])
+                response = await self.agent.run(
+                    turn["prompt"],
+                    require_experiment_resolution=turn["source"] == "scheduler",
+                )
         except asyncio.CancelledError:
             await asyncio.to_thread(
                 self.repository.finish,

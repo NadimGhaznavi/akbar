@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Required scheduled agent turns to confirm active work or successfully start an
+  experiment before they can complete, with corrective continuation and visible
+  MCP tool-call logging when Akbar tries to stop prematurely.
+
+---
+
 ## [0.10.4] - 2026-08-30 @ 05:46
 
 ### Changed
