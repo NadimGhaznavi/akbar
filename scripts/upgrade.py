@@ -18,6 +18,8 @@ from constants.DDatabase import DDatabase  # noqa: E402
 from scripts.install import (  # noqa: E402
     APPLICATION_FILES,
     DEPENDENCY_FILES,
+    OBSOLETE_APPLICATION_PATHS,
+    OBSOLETE_SERVICE_NAMES,
     install_application,
     install_services,
     validate_source,
@@ -64,7 +66,7 @@ def validate_installation() -> None:
 
 
 def stop_services() -> None:
-    for service_name in reversed(DAkbar.SERVICE_NAMES):
+    for service_name in reversed((*DAkbar.SERVICE_NAMES, *OBSOLETE_SERVICE_NAMES)):
         run("systemctl", "stop", service_name, check=False)
 
 
@@ -78,6 +80,12 @@ def remove_installed_runtime(install_root: Path = DAkbar.INSTALL_ROOT) -> None:
     targets.update(path.parts[0] for path in DEPENDENCY_FILES)
     for target in targets:
         destination = install_root / target
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        elif destination.exists() or destination.is_symlink():
+            destination.unlink()
+    for obsolete_path in OBSOLETE_APPLICATION_PATHS:
+        destination = install_root / obsolete_path
         if destination.is_dir() and not destination.is_symlink():
             shutil.rmtree(destination)
         elif destination.exists() or destination.is_symlink():

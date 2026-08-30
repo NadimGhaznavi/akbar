@@ -5,68 +5,211 @@ import unittest
 from typing import Any
 
 from constants.DScheduler import DScheduler
-from scheduler.SchedulerServer import Scheduler
+from experiment.ExperimentProtocol import MessageType
+from scheduler.SchedulerServer import (
+    ExperimentProposal,
+    LlamaPlanner,
+    PlanningError,
+    Scheduler,
+)
 
 
-class MemoryAgentRepository:
+class FakeHTTPResponse:
+    def raise_for_status(self) -> None:
+        pass
+
+    def json(self) -> dict[str, Any]:
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"epochs":50,"learning_rate":0.0008,'
+                            '"rationale":"Compare the previous run."}'
+                        )
+                    }
+                }
+            ]
+        }
+
+
+class FakeHTTPClient:
     def __init__(self) -> None:
-        self.active = False
-        self.enqueued: list[tuple[str, str]] = []
+        self.requests: list[tuple[str, dict[str, Any]]] = []
+
+    async def post(self, url: str, json: dict[str, Any]) -> FakeHTTPResponse:
+        self.requests.append((url, json))
+        return FakeHTTPResponse()
+
+    async def aclose(self) -> None:
+        pass
+
+
+class FakeExperimentControl:
+    def __init__(self, status: str = "completed") -> None:
+        self.status = status
+        self.calls: list[tuple[MessageType, dict[str, Any] | None]] = []
+
+    def request(
+        self,
+        message_type: MessageType,
+        payload: dict[str, Any] | None = None,
+        experiment_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.calls.append((message_type, payload))
+        if message_type is MessageType.GET_EXPERIMENT_STATUS:
+            return {"status": self.status}
+        if message_type is MessageType.GET_EXPERIMENT_CONFIG:
+            return {
+                "epochs": 50,
+                "learning_rate": 0.001,
+                "limits": {
+                    "epochs": {"minimum": 50, "maximum": 100_000},
+                    "learning_rate": {"minimum": 0.000_001, "maximum": 0.1},
+                },
+            }
+        if message_type is MessageType.LIST_EXPERIMENT_RESULTS:
+            return {
+                "results": [
+                    {
+                        "experiment_id": "experiment-1",
+                        "epochs": 50,
+                        "learning_rate": 0.001,
+                        "highscore": 2,
+                        "average_score": 0.08,
+                    }
+                ],
+                "returned": 1,
+            }
+        if message_type is MessageType.SET_EXPERIMENT_CONFIG:
+            return dict(payload or {})
+        if message_type is MessageType.START_EXPERIMENT:
+            return {"experiment_id": "experiment-2", "status": "queued"}
+        raise AssertionError(f"unexpected request: {message_type}")
+
+
+class FakePlanner:
+    def __init__(self) -> None:
+        self.inputs: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+
+    async def propose(
+        self,
+        config: dict[str, Any],
+        results: list[dict[str, Any]],
+    ) -> ExperimentProposal:
+        self.inputs.append((config, results))
+        return ExperimentProposal(
+            epochs=50,
+            learning_rate=0.0008,
+            rationale="Test a lower rate after reviewing experiment-1.",
+        )
+
+
+class MemoryPlanningRepository:
+    def __init__(self) -> None:
+        self.proposals: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+        self.started: list[tuple[str, str]] = []
+        self.failed: list[tuple[str, str]] = []
 
     def initialize(self) -> None:
         pass
 
-    def mark_interrupted(self) -> None:
-        pass
-
-    def enqueue(self, prompt: str, source: str) -> str | None:
-        if self.active:
-            return None
-        self.active = True
-        self.enqueued.append((prompt, source))
-        return "turn-1"
-
-    def claim_next(self) -> dict[str, Any] | None:
-        return None
-
-    def finish(
+    def create(
         self,
-        turn_id: str,
-        status: str,
-        response: str | None = None,
-        error: str | None = None,
-    ) -> None:
-        pass
+        proposal: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> str:
+        self.proposals.append((proposal, evidence))
+        return "plan-1"
+
+    def mark_started(self, plan_id: str, experiment_id: str) -> None:
+        self.started.append((plan_id, experiment_id))
+
+    def mark_failed(self, plan_id: str, error: str) -> None:
+        self.failed.append((plan_id, error))
 
 
 class SchedulerTest(unittest.TestCase):
-    def test_enqueue_once_creates_durable_scheduler_turn(self) -> None:
-        repository = MemoryAgentRepository()
-        scheduler = Scheduler(repository)
+    def test_planner_makes_one_structured_request_with_previous_results(self) -> None:
+        http = FakeHTTPClient()
+        planner = LlamaPlanner(client=http)
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+        results = [{"experiment_id": "experiment-1", "highscore": 2}]
 
-        self.assertEqual(asyncio.run(scheduler.enqueue_once()), "turn-1")
-        self.assertEqual(repository.enqueued, [(scheduler.prompt, "scheduler")])
+        proposal = asyncio.run(planner.propose(config, results))
 
-    def test_enqueue_once_skips_when_turn_is_active(self) -> None:
-        repository = MemoryAgentRepository()
-        repository.active = True
+        self.assertEqual(proposal.learning_rate, 0.0008)
+        self.assertEqual(len(http.requests), 1)
+        request = http.requests[0][1]
+        self.assertEqual(request["response_format"]["type"], "json_schema")
+        self.assertIn("previous_experiments", request["messages"][1]["content"])
 
-        self.assertIsNone(asyncio.run(Scheduler(repository).enqueue_once()))
-        self.assertEqual(repository.enqueued, [])
+    def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
+        experiment = FakeExperimentControl()
+        planner = FakePlanner()
+        plans = MemoryPlanningRepository()
+        scheduler = Scheduler(experiment, planner, plans)
+
+        experiment_id = asyncio.run(scheduler.run_once())
+
+        self.assertEqual(experiment_id, "experiment-2")
+        self.assertEqual(len(planner.inputs), 1)
+        self.assertEqual(planner.inputs[0][1][0]["experiment_id"], "experiment-1")
+        self.assertEqual(
+            experiment.calls,
+            [
+                (MessageType.GET_EXPERIMENT_STATUS, None),
+                (MessageType.GET_EXPERIMENT_CONFIG, None),
+                (
+                    MessageType.LIST_EXPERIMENT_RESULTS,
+                    {"limit": DScheduler.RESULT_HISTORY_LIMIT},
+                ),
+                (
+                    MessageType.SET_EXPERIMENT_CONFIG,
+                    {"epochs": 50, "learning_rate": 0.0008},
+                ),
+                (MessageType.START_EXPERIMENT, None),
+            ],
+        )
+        self.assertEqual(plans.started, [("plan-1", "experiment-2")])
+        self.assertIn("rationale", plans.proposals[0][0])
+
+    def test_active_experiment_skips_planning(self) -> None:
+        experiment = FakeExperimentControl(status="running")
+        planner = FakePlanner()
+        plans = MemoryPlanningRepository()
+
+        result = asyncio.run(Scheduler(experiment, planner, plans).run_once())
+
+        self.assertIsNone(result)
+        self.assertEqual(planner.inputs, [])
+        self.assertEqual(
+            experiment.calls,
+            [(MessageType.GET_EXPERIMENT_STATUS, None)],
+        )
 
     def test_scheduler_rejects_unsafe_timing_values(self) -> None:
-        repository = MemoryAgentRepository()
         with self.assertRaisesRegex(ValueError, "interval must be positive"):
-            Scheduler(repository, interval_seconds=0)
+            Scheduler(
+                FakeExperimentControl(),
+                FakePlanner(),
+                MemoryPlanningRepository(),
+                interval_seconds=0,
+            )
 
-    def test_default_prompt_encodes_the_safe_decision_cycle(self) -> None:
-        prompt = Scheduler(MemoryAgentRepository()).prompt
-        self.assertIn("queued or running", prompt)
-        self.assertIn("review recent completed results", prompt)
-        self.assertIn("start exactly one experiment", prompt)
-        self.assertIn("rationale", prompt)
+    def test_proposal_validation_enforces_config_limits(self) -> None:
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+        with self.assertRaisesRegex(PlanningError, "epochs are outside"):
+            ExperimentProposal.from_dict(
+                {
+                    "epochs": 49,
+                    "learning_rate": 0.001,
+                    "rationale": "Too short.",
+                },
+                config,
+            )
 
-    def test_default_schedule_pokes_every_fifteen_seconds(self) -> None:
+    def test_default_schedule_checks_every_fifteen_seconds(self) -> None:
         self.assertEqual(DScheduler.INITIAL_DELAY_SECONDS, 15)
         self.assertEqual(DScheduler.INTERVAL_SECONDS, 15)
 

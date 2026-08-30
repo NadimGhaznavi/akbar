@@ -1,7 +1,7 @@
 [Unit]
 Description=Akbar Scheduler
-After=mariadb.service
-Wants=mariadb.service
+After=mariadb.service akbar.service akbar-experimentd.service
+Wants=mariadb.service akbar.service akbar-experimentd.service
 
 [Service]
 Type=simple
