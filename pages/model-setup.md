@@ -4,6 +4,8 @@ author_profile: true
 layout: single
 ---
 
+![Akbar](/pages/images/akbar.png)
+
 # Setup a venv environment
 
 ```sh
