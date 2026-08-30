@@ -23,6 +23,8 @@ def build_command() -> list[str]:
         DAkbar.HOST,
         "--port",
         str(DAkbar.PORT),
+        "--mcp-servers-config",
+        str(DAkbar.MCP_SERVERS_CONFIG),
     ]
 
 
@@ -34,6 +36,10 @@ def validate_configuration() -> None:
         raise PermissionError(f"llama-server is not executable: {DAkbar.LLAMA_SERVER}")
     if not DAkbar.MODEL.is_file():
         raise FileNotFoundError(f"model not found: {DAkbar.MODEL}")
+    if not DAkbar.MCP_SERVERS_CONFIG.is_file():
+        raise FileNotFoundError(
+            f"MCP server configuration not found: {DAkbar.MCP_SERVERS_CONFIG}"
+        )
 
 
 def main() -> int:
