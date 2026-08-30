@@ -9,11 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-30 @ 00:19
+
+### Added
+
+- Initial systemd-managed experiment service with a stubbed Python server and
+  clean process lifecycle.
+
+---
+
 ## [0.2.2] - 2026-08-29 @ 23:16
 
 ### Changed
 
 - Release usage now suggests the next logical `feat/maint-X.Y.Z` branch.
+
+### Added
+
+- MariaDB provisioning with a dedicated database, scoped database account, and
+  protected service credentials.
+
+---
 
 ## [0.2.1] - 2026-08-29 @ 23:12
 

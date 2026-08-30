@@ -6,8 +6,19 @@ class DAkbar:
     INSTALL_ROOT: Final[Path] = Path("/opt/akbar")
     VENV_DIRECTORY: Final[str] = ".venv"
     SERVICE_NAME: Final[str] = "akbar.service"
+    EXPERIMENT_SERVICE_NAME: Final[str] = "akbar-experimentd.service"
+    SERVICE_NAMES: Final[tuple[str, ...]] = (
+        EXPERIMENT_SERVICE_NAME,
+        SERVICE_NAME,
+    )
     SERVICE_USER: Final[str] = "akbar"
     SERVICE_GROUP: Final[str] = "akbar"
+    CONFIG_DIRECTORY: Final[Path] = Path("/etc/akbar")
+    DATABASE_ENV_FILE: Final[Path] = CONFIG_DIRECTORY / "database.env"
+    DATABASE_HOST: Final[str] = "localhost"
+    DATABASE_PORT: Final[int] = 3306
+    DATABASE_NAME: Final[str] = "akbar"
+    DATABASE_USER: Final[str] = "akbar"
     LLAMA_SERVER: Final[Path] = Path("/opt/dev/llama.cpp/build/bin/llama-server")
     MODEL: Final[Path] = Path(
         "/opt/dev/models/quantized/Qwen3.5-4B-Q4_K_M.gguf"
@@ -16,4 +27,4 @@ class DAkbar:
     CONTEXT_SIZE: Final[int] = 16_384
     HOST: Final[str] = "0.0.0.0"
     PORT: Final[int] = 51970
-    VERSION: Final[str] = "0.2.2"
+    VERSION: Final[str] = "0.2.3"
