@@ -31,6 +31,7 @@ class ExperimentRepository(Protocol):
     def get(self, experiment_id: str) -> dict[str, Any] | None: ...
     def count(self) -> int: ...
     def resolve_suffix(self, suffix: str) -> list[str]: ...
+    def list_results(self, limit: int) -> list[dict[str, Any]]: ...
 
 
 class MariaDBExperimentRepository:
@@ -265,3 +266,39 @@ class MariaDBExperimentRepository:
             )
             rows = cursor.fetchall()
         return [str(row["experiment_id"]) for row in rows]
+
+    def list_results(self, limit: int) -> list[dict[str, Any]]:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT experiment_id, config_json, result_json, completed_at
+                FROM experiments
+                WHERE status = 'completed' AND result_json IS NOT NULL
+                ORDER BY completed_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+
+        summaries = []
+        for row in rows:
+            config = json.loads(row["config_json"])
+            result = json.loads(row["result_json"])
+            metrics = result.get("metrics", {})
+            summaries.append(
+                {
+                    "experiment_id": row["experiment_id"],
+                    "seed": config.get("seed"),
+                    "epochs": config.get("epochs"),
+                    "learning_rate": config.get("learning_rate"),
+                    "highscore": metrics.get("highscore"),
+                    "average_score": metrics.get("average_score"),
+                    "completed_at": (
+                        row["completed_at"].isoformat()
+                        if row["completed_at"]
+                        else None
+                    ),
+                }
+            )
+        return summaries

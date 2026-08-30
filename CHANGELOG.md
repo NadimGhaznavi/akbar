@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-30 @ 04:11
+
+### Added
+
+- Bounded MCP result-history listing with compact summaries of the most recent
+  completed experiments and their IDs, configuration, and score metrics,
+  accompanied by numbered self-documentation for Akbar.
+
+---
+
 ## [0.8.1] - 2026-08-30 @ 04:03
 
 ### Changed
