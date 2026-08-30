@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trusted menu-driven interface to Akbar's experiment control plane."""
+"""Read-only menu-driven visibility into Akbar's experiment system."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TextIO
 
-# When installed as /opt/akbar/bin/akbar-cli, make the application packages
-# beside bin/ importable without relying on the caller's working directory.
+# When installed under /opt/akbar/scripts, make the application packages beside
+# scripts/ importable without relying on the caller's working directory.
 APPLICATION_ROOT = Path(__file__).resolve().parent.parent
 INSTALLED_PYTHON = APPLICATION_ROOT / ".venv" / "bin" / "python"
 if (
@@ -56,12 +56,12 @@ class AkbarCLI:
 Akbar Experiment CLI
 
 1. Check experiment service
-2. Count persisted experiments
-3. Start experiment
+2. Show active configuration
+3. Count persisted experiments
 4. Show experiment status
 5. Show current highscore
-6. Show persisted result
-7. Stop experiment
+6. List recent completed results
+7. Show persisted result
 8. Quit
 """
 
@@ -79,12 +79,12 @@ Akbar Experiment CLI
     def run(self) -> int:
         actions = {
             "1": self.ping,
-            "2": self.count,
-            "3": self.start,
+            "2": self.configuration,
+            "3": self.count,
             "4": self.status,
             "5": self.highscore,
-            "6": self.result,
-            "7": self.stop,
+            "6": self.list_results,
+            "7": self.result,
         }
         while True:
             self._write(self.MENU.rstrip())
@@ -110,10 +110,8 @@ Akbar Experiment CLI
     def count(self) -> None:
         self._show(self.client.request(MessageType.GET_EXPERIMENT_COUNT))
 
-    def start(self) -> None:
-        response = self.client.request(MessageType.START_EXPERIMENT)
-        self._remember(response)
-        self._show(response)
+    def configuration(self) -> None:
+        self._show(self.client.request(MessageType.GET_EXPERIMENT_CONFIG))
 
     def status(self) -> None:
         response = self.client.request(
@@ -139,19 +137,11 @@ Akbar Experiment CLI
         self._remember(response)
         self._show(response)
 
-    def stop(self) -> None:
-        experiment_id = self._select_id(required=True)
-        confirmation = self.input(
-            f"Stop experiment {short_id(experiment_id)}? [y/N]: "
-        ).strip().lower()
-        if confirmation not in {"y", "yes"}:
-            self._write("Stop cancelled.")
-            return
+    def list_results(self) -> None:
         response = self.client.request(
-            MessageType.STOP_EXPERIMENT,
-            experiment_id=experiment_id,
+            MessageType.LIST_EXPERIMENT_RESULTS,
+            {"limit": 10},
         )
-        self._remember(response)
         self._show(response)
 
     def _select_id(self, required: bool) -> str | None:

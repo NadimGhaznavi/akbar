@@ -8,7 +8,6 @@ from pathlib import Path
 from constants.DAkbar import DAkbar
 from experiment.ExperimentProtocol import MessageType
 
-
 CLI_PATH = Path(__file__).resolve().parent.parent / "scripts" / "akbar-cli.py"
 CLI_SPEC = importlib.util.spec_from_file_location("akbar_cli", CLI_PATH)
 if CLI_SPEC is None or CLI_SPEC.loader is None:
@@ -33,8 +32,15 @@ class FakeClient:
             return {"service": "akbar-experimentd", "version": DAkbar.VERSION}
         if message_type is MessageType.GET_EXPERIMENT_COUNT:
             return {"experiment_count": 12}
-        if message_type is MessageType.START_EXPERIMENT:
-            return {"experiment_id": EXPERIMENT_ID, "status": "queued"}
+        if message_type is MessageType.GET_EXPERIMENT_CONFIG:
+            return {"epochs": 50, "learning_rate": 0.001}
+        if message_type is MessageType.LIST_EXPERIMENT_RESULTS:
+            return {
+                "returned": 1,
+                "results": [
+                    {"experiment_id": EXPERIMENT_ID, "highscore": 7}
+                ],
+            }
         if message_type is MessageType.RESOLVE_EXPERIMENT_ID:
             return {"experiment_id": EXPERIMENT_ID}
         return {"experiment_id": experiment_id, "status": "completed"}
@@ -53,8 +59,8 @@ class CLIFormattingTest(unittest.TestCase):
         self.assertNotIn(EXPERIMENT_ID, str(displayed))
         self.assertEqual(short_id(EXPERIMENT_ID), "[a9f0]")
 
-    def test_menu_starts_and_counts_without_printing_full_id(self) -> None:
-        answers = iter(["2", "3", "8"])
+    def test_menu_shows_read_only_views_without_printing_full_id(self) -> None:
+        answers = iter(["2", "3", "6", "8"])
         output = StringIO()
         client = FakeClient()
         status = AkbarCLI(
@@ -64,9 +70,15 @@ class CLIFormattingTest(unittest.TestCase):
         ).run()
         rendered = output.getvalue()
         self.assertEqual(status, 0)
+        self.assertIn('"learning_rate": 0.001', rendered)
         self.assertIn('"experiment_count": 12', rendered)
         self.assertIn('"experiment_id": "[a9f0]"', rendered)
         self.assertNotIn(EXPERIMENT_ID, rendered)
+
+    def test_cli_exposes_no_mutating_actions(self) -> None:
+        cli = AkbarCLI(client=FakeClient())
+        self.assertFalse(hasattr(cli, "start"))
+        self.assertFalse(hasattr(cli, "stop"))
 
     def test_four_character_input_is_resolved_internally(self) -> None:
         answers = iter(["a9f0"])

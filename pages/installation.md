@@ -86,10 +86,11 @@ Run the administrative experiment interface with:
 /opt/akbar/scripts/akbar-cli.py
 ```
 
-The menu uses the same experiment control plane as Akbar's MCP tools, but shows
-the structured service responses directly. It can check service health, count
-persisted experiments, start and stop a run, inspect live status and highscore,
-and retrieve completed results from MariaDB.
+The read-only menu uses the same experiment control plane as Akbar's MCP tools,
+but shows structured service responses directly without involving the language
+model. It can inspect service health, active configuration, experiment counts,
+live status and highscore, recent completed runs, and persisted results. It
+cannot start, stop, or configure experiments.
 
 Only the final four hexadecimal characters of an experiment ID are displayed.
 The CLI retains full IDs internally and can resolve a historical four-character
