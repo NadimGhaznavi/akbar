@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install Akbar and its systemd service."""
+"""Destructively install a fresh Akbar deployment."""
 
 from __future__ import annotations
 
@@ -99,7 +99,10 @@ DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Install Akbar and create its Python virtual environment."
+        description=(
+            "Destructively recreate Akbar, including its MariaDB database and "
+            "credentials."
+        )
     )
     parser.add_argument(
         "--prefix",
@@ -130,15 +133,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run(*command: str | Path) -> None:
-    subprocess.run([str(part) for part in command], check=True)
+def run(*command: str | Path, check: bool = True) -> None:
+    subprocess.run([str(part) for part in command], check=check)
 
 
 def validate_prefix(prefix: Path) -> Path:
     prefix = prefix.expanduser()
-    if not prefix.is_absolute() or prefix == Path("/"):
-        raise ValueError("--prefix must be an absolute path other than /")
-    return prefix.resolve(strict=False)
+    if not prefix.is_absolute() or len(prefix.parts) < 3:
+        raise ValueError("--prefix must be a specific absolute directory")
+    resolved = prefix.resolve(strict=False)
+    if resolved == PROJECT_ROOT or PROJECT_ROOT.is_relative_to(resolved):
+        raise ValueError("--prefix cannot contain the source checkout")
+    return resolved
 
 
 def require_root() -> None:
@@ -181,24 +187,6 @@ def ensure_service_account(prefix: Path) -> None:
         )
 
 
-def read_database_password() -> str | None:
-    if not DDatabase.ENV_FILE.is_file():
-        return None
-    if DDatabase.ENV_FILE.is_symlink():
-        raise ValueError(f"refusing symlinked credential file: {DDatabase.ENV_FILE}")
-
-    values = {}
-    for line in DDatabase.ENV_FILE.read_text(encoding="utf-8").splitlines():
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            values[key] = value
-
-    password = values.get("AKBAR_DB_PASSWORD")
-    if not password:
-        raise ValueError(f"database password missing from {DDatabase.ENV_FILE}")
-    return password
-
-
 def write_database_environment(password: str) -> None:
     DAkbar.CONFIG_DIRECTORY.mkdir(parents=True, exist_ok=True, mode=0o750)
     DAkbar.CONFIG_DIRECTORY.chmod(0o750)
@@ -230,17 +218,39 @@ def write_database_environment(password: str) -> None:
     temporary_path.replace(DDatabase.ENV_FILE)
 
 
-def provision_database() -> None:
+def mariadb_client() -> str:
     mariadb = shutil.which("mariadb")
     if mariadb is None:
         raise FileNotFoundError(
             "MariaDB client not found; install MariaDB server and client first"
         )
+    return mariadb
 
-    password = read_database_password()
-    if password is None:
-        alphabet = string.ascii_letters + string.digits
-        password = "".join(secrets.choice(alphabet) for _ in range(48))
+
+def destroy_database() -> None:
+    if DAkbar.CONFIG_DIRECTORY.is_symlink():
+        raise ValueError(
+            f"refusing symlinked config directory: {DAkbar.CONFIG_DIRECTORY}"
+        )
+    sql = f"""
+DROP DATABASE IF EXISTS `{DDatabase.DB_NAME}`;
+DROP USER IF EXISTS '{DDatabase.USERNAME}'@'{DDatabase.HOST}';
+"""
+    subprocess.run(
+        [mariadb_client(), "--protocol=socket", "--batch"],
+        input=sql,
+        text=True,
+        check=True,
+    )
+    if DAkbar.CONFIG_DIRECTORY.is_dir():
+        shutil.rmtree(DAkbar.CONFIG_DIRECTORY)
+
+
+def provision_database() -> None:
+    mariadb = mariadb_client()
+
+    alphabet = string.ascii_letters + string.digits
+    password = "".join(secrets.choice(alphabet) for _ in range(48))
 
     sql = f"""
 CREATE DATABASE IF NOT EXISTS `{DDatabase.DB_NAME}`
@@ -261,19 +271,43 @@ GRANT ALL PRIVILEGES ON `{DDatabase.DB_NAME}`.*
     write_database_environment(password)
 
 
+def destroy_services() -> None:
+    for service_name in reversed(DAkbar.SERVICE_NAMES):
+        run("systemctl", "disable", "--now", service_name, check=False)
+        service_unit = SYSTEMD_DIRECTORY / service_name
+        if service_unit.is_file() or service_unit.is_symlink():
+            service_unit.unlink()
+    run("systemctl", "daemon-reload")
+
+
+def destroy_service_account() -> None:
+    try:
+        pwd.getpwnam(DAkbar.SERVICE_USER)
+    except KeyError:
+        pass
+    else:
+        run("userdel", DAkbar.SERVICE_USER)
+
+    try:
+        grp.getgrnam(DAkbar.SERVICE_GROUP)
+    except KeyError:
+        pass
+    else:
+        run("groupdel", DAkbar.SERVICE_GROUP)
+
+
+def destroy_installation(prefix: Path) -> None:
+    if prefix.is_symlink():
+        raise ValueError(f"refusing symlinked installation prefix: {prefix}")
+    if prefix.exists() and not prefix.is_dir():
+        raise ValueError(f"refusing non-directory installation prefix: {prefix}")
+    if prefix.is_dir():
+        shutil.rmtree(prefix)
+
+
 def install_application(prefix: Path) -> None:
     prefix.mkdir(parents=True, exist_ok=True, mode=0o755)
     prefix.chmod(0o755)
-
-    # Application packages are replaced as a unit so removed or renamed source
-    # files cannot linger after an update. The virtual environment is separate.
-    installation_targets = {destination.parts[0] for _, destination in APPLICATION_FILES}
-    for target in installation_targets:
-        destination = prefix / target
-        if destination.is_dir():
-            shutil.rmtree(destination)
-        elif destination.exists() or destination.is_symlink():
-            destination.unlink()
 
     for source_path, destination_path in APPLICATION_FILES:
         source = PROJECT_ROOT / source_path
@@ -337,9 +371,14 @@ def main() -> int:
 
         if prefix == DAkbar.INSTALL_ROOT:
             require_root()
-        if prefix == DAkbar.INSTALL_ROOT:
+            destroy_services()
+            destroy_installation(prefix)
+            destroy_database()
+            destroy_service_account()
             ensure_service_account(prefix)
             provision_database()
+        else:
+            destroy_installation(prefix)
 
         install_application(prefix)
         install_environment(prefix, args.skip_dependencies)
