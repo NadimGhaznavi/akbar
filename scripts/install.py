@@ -21,12 +21,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from constants.DAkbar import DAkbar  # noqa: E402
+from constants.DDatabase import DDatabase  # noqa: E402
 
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 APPLICATION_FILES = (
     (Path("constants/__init__.py"), Path("constants/__init__.py")),
     (Path("constants/DAkbar.py"), Path("constants/DAkbar.py")),
+    (Path("constants/DDatabase.py"), Path("constants/DDatabase.py")),
+    (Path("constants/DExperiment.py"), Path("constants/DExperiment.py")),
     (Path("server/__init__.py"), Path("server/__init__.py")),
     (Path("server/AkbarServer.py"), Path("server/AkbarServer.py")),
     (Path("server/mcp.json"), Path("server/mcp.json")),
@@ -34,6 +37,30 @@ APPLICATION_FILES = (
     (
         Path("experiment/ExperimentServer.py"),
         Path("experiment/ExperimentServer.py"),
+    ),
+    (
+        Path("experiment/ExperimentClient.py"),
+        Path("experiment/ExperimentClient.py"),
+    ),
+    (
+        Path("experiment/ExperimentConfig.py"),
+        Path("experiment/ExperimentConfig.py"),
+    ),
+    (
+        Path("experiment/ExperimentProtocol.py"),
+        Path("experiment/ExperimentProtocol.py"),
+    ),
+    (
+        Path("experiment/ExperimentRepository.py"),
+        Path("experiment/ExperimentRepository.py"),
+    ),
+    (
+        Path("experiment/ExperimentRunner.py"),
+        Path("experiment/ExperimentRunner.py"),
+    ),
+    (
+        Path("experiment/ExperimentState.py"),
+        Path("experiment/ExperimentState.py"),
     ),
     (Path("tools/tools.py"), Path("tools.py")),
 )
@@ -125,20 +152,20 @@ def ensure_service_account(prefix: Path) -> None:
 
 
 def read_database_password() -> str | None:
-    if not DAkbar.DATABASE_ENV_FILE.is_file():
+    if not DDatabase.ENV_FILE.is_file():
         return None
-    if DAkbar.DATABASE_ENV_FILE.is_symlink():
-        raise ValueError(f"refusing symlinked credential file: {DAkbar.DATABASE_ENV_FILE}")
+    if DDatabase.ENV_FILE.is_symlink():
+        raise ValueError(f"refusing symlinked credential file: {DDatabase.ENV_FILE}")
 
     values = {}
-    for line in DAkbar.DATABASE_ENV_FILE.read_text(encoding="utf-8").splitlines():
+    for line in DDatabase.ENV_FILE.read_text(encoding="utf-8").splitlines():
         if line and not line.startswith("#") and "=" in line:
             key, value = line.split("=", 1)
             values[key] = value
 
     password = values.get("AKBAR_DB_PASSWORD")
     if not password:
-        raise ValueError(f"database password missing from {DAkbar.DATABASE_ENV_FILE}")
+        raise ValueError(f"database password missing from {DDatabase.ENV_FILE}")
     return password
 
 
@@ -152,10 +179,10 @@ def write_database_environment(password: str) -> None:
     )
 
     content = (
-        f"AKBAR_DB_HOST={DAkbar.DATABASE_HOST}\n"
-        f"AKBAR_DB_PORT={DAkbar.DATABASE_PORT}\n"
-        f"AKBAR_DB_NAME={DAkbar.DATABASE_NAME}\n"
-        f"AKBAR_DB_USER={DAkbar.DATABASE_USER}\n"
+        f"AKBAR_DB_HOST={DDatabase.HOST}\n"
+        f"AKBAR_DB_PORT={DDatabase.PORT}\n"
+        f"AKBAR_DB_NAME={DDatabase.DB_NAME}\n"
+        f"AKBAR_DB_USER={DDatabase.USERNAME}\n"
         f"AKBAR_DB_PASSWORD={password}\n"
     )
     with tempfile.NamedTemporaryFile(
@@ -170,7 +197,7 @@ def write_database_environment(password: str) -> None:
 
     temporary_path.chmod(0o640)
     shutil.chown(temporary_path, user="root", group=DAkbar.SERVICE_GROUP)
-    temporary_path.replace(DAkbar.DATABASE_ENV_FILE)
+    temporary_path.replace(DDatabase.ENV_FILE)
 
 
 def provision_database() -> None:
@@ -186,14 +213,14 @@ def provision_database() -> None:
         password = "".join(secrets.choice(alphabet) for _ in range(48))
 
     sql = f"""
-CREATE DATABASE IF NOT EXISTS `{DAkbar.DATABASE_NAME}`
+CREATE DATABASE IF NOT EXISTS `{DDatabase.DB_NAME}`
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}'
+CREATE USER IF NOT EXISTS '{DDatabase.USERNAME}'@'{DDatabase.HOST}'
     IDENTIFIED BY '{password}';
-ALTER USER '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}'
+ALTER USER '{DDatabase.USERNAME}'@'{DDatabase.HOST}'
     IDENTIFIED BY '{password}';
-GRANT ALL PRIVILEGES ON `{DAkbar.DATABASE_NAME}`.*
-    TO '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}';
+GRANT ALL PRIVILEGES ON `{DDatabase.DB_NAME}`.*
+    TO '{DDatabase.USERNAME}'@'{DDatabase.HOST}';
 """
     subprocess.run(
         [mariadb, "--protocol=socket", "--batch"],
