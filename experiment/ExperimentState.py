@@ -38,10 +38,6 @@ class ExperimentStateStore:
     def __init__(self) -> None:
         self._latest: ExperimentState | None = None
 
-    @property
-    def latest(self) -> ExperimentState | None:
-        return self._latest
-
     def create(self, experiment_id: str, config: dict[str, Any]) -> ExperimentState:
         self._latest = ExperimentState(
             experiment_id=experiment_id,

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from enum import IntEnum
-import random
 
 
 @dataclass(frozen=True, slots=True)

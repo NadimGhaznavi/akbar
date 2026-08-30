@@ -28,7 +28,6 @@ from experiment.ExperimentRepository import (
 from experiment.ExperimentRunner import ExperimentCancelled, ExperimentRunner
 from experiment.ExperimentState import ExperimentState, ExperimentStateStore, utc_now
 
-
 LOG = logging.getLogger("akbar.experimentd")
 
 
@@ -127,6 +126,8 @@ class ExperimentServer:
             return await self._result(request)
         if request.message_type is MessageType.GET_EXPERIMENT_COUNT:
             return await self._count(request)
+        if request.message_type is MessageType.RESOLVE_EXPERIMENT_ID:
+            return await self._resolve_experiment_id(request)
         if request.message_type is MessageType.GET_CURRENT_HIGHSCORE:
             return self._highscore(request)
         if request.message_type is MessageType.STOP_EXPERIMENT:
@@ -233,7 +234,7 @@ class ExperimentServer:
             telemetry,
             experiment_id=state.experiment_id,
         )
-        topic = f"experiment.{state.experiment_id}.epoch".encode("utf-8")
+        topic = f"experiment.{state.experiment_id}.epoch".encode()
         try:
             await self._telemetry.send_multipart(
                 [topic, message.to_json()], flags=zmq.DONTWAIT
@@ -286,6 +287,29 @@ class ExperimentServer:
         return request.reply(
             MessageType.EXPERIMENT_COUNT,
             {"experiment_count": count},
+        )
+
+    async def _resolve_experiment_id(
+        self,
+        request: ExperimentMessage,
+    ) -> ExperimentMessage:
+        suffix = request.payload.get("suffix")
+        if not isinstance(suffix, str) or len(suffix) != 4:
+            raise ProtocolError("experiment ID suffix must contain exactly 4 characters")
+        if not all(character in "0123456789abcdefABCDEF" for character in suffix):
+            raise ProtocolError("experiment ID suffix must be hexadecimal")
+        matches = await asyncio.to_thread(
+            self.repository.resolve_suffix,
+            suffix.lower(),
+        )
+        if not matches:
+            raise ProtocolError("experiment not found")
+        if len(matches) > 1:
+            raise ProtocolError("experiment ID suffix is ambiguous")
+        return request.reply(
+            MessageType.EXPERIMENT_ID_RESOLVED,
+            {},
+            matches[0],
         )
 
     def _highscore(self, request: ExperimentMessage) -> ExperimentMessage:

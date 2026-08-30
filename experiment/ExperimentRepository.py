@@ -26,6 +26,7 @@ class ExperimentRepository(Protocol):
     ) -> None: ...
     def get(self, experiment_id: str) -> dict[str, Any] | None: ...
     def count(self) -> int: ...
+    def resolve_suffix(self, suffix: str) -> list[str]: ...
 
 
 class MariaDBExperimentRepository:
@@ -144,3 +145,18 @@ class MariaDBExperimentRepository:
             cursor.execute("SELECT COUNT(*) AS experiment_count FROM experiments")
             row = cursor.fetchone()
         return int(row["experiment_count"])
+
+    def resolve_suffix(self, suffix: str) -> list[str]:
+        with self._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT experiment_id
+                FROM experiments
+                WHERE experiment_id LIKE %s
+                ORDER BY created_at DESC
+                LIMIT 2
+                """,
+                (f"%{suffix}",),
+            )
+            rows = cursor.fetchall()
+        return [str(row["experiment_id"]) for row in rows]

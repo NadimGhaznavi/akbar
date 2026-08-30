@@ -8,8 +8,7 @@ from typing import Any
 import zmq
 import zmq.asyncio
 
-from experiment.ExperimentClient import ExperimentClient
-from experiment.ExperimentClient import ExperimentClientError
+from experiment.ExperimentClient import ExperimentClient, ExperimentClientError
 from experiment.ExperimentConfig import ExperimentConfig
 from experiment.ExperimentProtocol import MessageType
 from experiment.ExperimentServer import ExperimentServer
@@ -55,6 +54,13 @@ class MemoryRepository:
 
     def count(self) -> int:
         return len(self.records)
+
+    def resolve_suffix(self, suffix: str) -> list[str]:
+        return [
+            experiment_id
+            for experiment_id in reversed(self.records)
+            if experiment_id.endswith(suffix)
+        ][:2]
 
 
 def unused_tcp_endpoint() -> str:
@@ -143,7 +149,7 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(
                     topic,
-                    f"experiment.{experiment_id}.epoch".encode("utf-8"),
+                    f"experiment.{experiment_id}.epoch".encode(),
                 )
                 telemetry.append(payload)
         finally:
@@ -194,6 +200,15 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         await self.request(MessageType.START_EXPERIMENT)
         counted = await self.request(MessageType.GET_EXPERIMENT_COUNT)
         self.assertEqual(counted["experiment_count"], 1)
+
+    async def test_resolve_experiment_id_suffix(self) -> None:
+        accepted = await self.request(MessageType.START_EXPERIMENT)
+        experiment_id = accepted["experiment_id"]
+        resolved = await self.request(
+            MessageType.RESOLVE_EXPERIMENT_ID,
+            payload={"suffix": experiment_id[-4:]},
+        )
+        self.assertEqual(resolved["experiment_id"], experiment_id)
 
 
 if __name__ == "__main__":

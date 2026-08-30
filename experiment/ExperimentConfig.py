@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any
 
 from constants.DExperiment import DExperiment
 
@@ -47,14 +46,6 @@ class ExperimentConfig:
             raise ValueError("epsilon values must satisfy 0 <= min <= start <= 1")
         if not 0 < self.epsilon_decay <= 1:
             raise ValueError("epsilon_decay must be greater than 0 and at most 1")
-
-    @classmethod
-    def from_dict(cls, payload: dict[str, Any] | None) -> "ExperimentConfig":
-        values = payload or {}
-        unknown = set(values) - set(cls.__dataclass_fields__)
-        if unknown:
-            raise ValueError(f"unknown configuration fields: {', '.join(sorted(unknown))}")
-        return cls(**values)
 
     def to_dict(self) -> dict[str, int | float]:
         return asdict(self)

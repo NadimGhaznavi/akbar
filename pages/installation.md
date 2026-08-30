@@ -55,11 +55,31 @@ The application and its virtual environment are installed under `/opt/akbar`:
 ```text
 /opt/akbar/
 ├── .venv/
+├── bin/akbar-cli
 ├── constants/
+├── experiment/
 ├── server/
+├── snake_lab/
 ├── requirements.txt
 └── tools.py
 ```
+
+## Experiment CLI
+
+Run the administrative experiment interface with:
+
+```sh
+/opt/akbar/bin/akbar-cli
+```
+
+The menu uses the same experiment control plane as Akbar's MCP tools, but shows
+the structured service responses directly. It can check service health, count
+persisted experiments, start and stop a run, inspect live status and highscore,
+and retrieve completed results from MariaDB.
+
+Only the final four hexadecimal characters of an experiment ID are displayed.
+The CLI retains full IDs internally and can resolve a historical four-character
+suffix through MariaDB. Ambiguous suffixes are rejected rather than guessed.
 
 The systemd units are installed separately:
 
@@ -83,17 +103,25 @@ in application code.
 
 Every install generates a new database password.
 
-## Update Akbar
+## Upgrade Akbar
 
-Run the reinstall command from the updated source checkout:
+Run the upgrade command from the updated source checkout:
 
 ```sh
-sudo python3 scripts/reinstall.py
+sudo python3 scripts/upgrade.py
 ```
 
-This invokes the same destructive installation path, then starts the recreated
-services. It deletes the existing database, experiments, credentials, virtual
-environment, application files, and service enablement state.
+Upgrade stops the services, replaces only installed application files, updates
+packages in the existing virtual environment, reinstalls the systemd units, and
+restarts the services. It preserves the MariaDB database and all experiment
+records, the database account and credentials, the service account, virtual
+environment, and existing service enablement state.
+
+To leave the virtual-environment packages unchanged, use:
+
+```sh
+sudo python3 scripts/upgrade.py --skip-dependencies
+```
 
 ## Uninstall Akbar
 
