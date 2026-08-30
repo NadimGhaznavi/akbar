@@ -1,0 +1,1 @@
+"""Shared Akbar project constants."""

@@ -1,0 +1,20 @@
+[Unit]
+Description=Akbar Server
+After=network.target
+
+[Service]
+Type=simple
+User=akbar
+Group=akbar
+WorkingDirectory=/opt/akbar
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/akbar/.venv/bin/python -m server.AkbarServer
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

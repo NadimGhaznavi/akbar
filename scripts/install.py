@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Install Akbar and its systemd service."""
+
+from __future__ import annotations
+
+import argparse
+import grp
+import os
+from pathlib import Path
+import pwd
+import shutil
+import subprocess
+import sys
+import venv
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from constants.DAkbar import DAkbar  # noqa: E402
+
+
+SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
+APPLICATION_FILES = (
+    Path("constants/__init__.py"),
+    Path("constants/DAkbar.py"),
+    Path("server/__init__.py"),
+    Path("server/AkbarServer.py"),
+)
+DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Install Akbar and create its Python virtual environment."
+    )
+    parser.add_argument(
+        "--prefix",
+        type=Path,
+        default=DAkbar.INSTALL_ROOT,
+        help=f"installation directory (default: {DAkbar.INSTALL_ROOT})",
+    )
+    parser.add_argument(
+        "--skip-dependencies",
+        action="store_true",
+        help="create the virtual environment without installing dependencies",
+    )
+    parser.add_argument(
+        "--no-service",
+        action="store_true",
+        help="do not install the systemd unit",
+    )
+    parser.add_argument(
+        "--enable",
+        action="store_true",
+        help="enable the systemd service at boot",
+    )
+    parser.add_argument(
+        "--start",
+        action="store_true",
+        help="start or restart the service after installation",
+    )
+    return parser.parse_args()
+
+
+def run(*command: str | Path) -> None:
+    subprocess.run([str(part) for part in command], check=True)
+
+
+def validate_prefix(prefix: Path) -> Path:
+    prefix = prefix.expanduser()
+    if not prefix.is_absolute() or prefix == Path("/"):
+        raise ValueError("--prefix must be an absolute path other than /")
+    return prefix.resolve(strict=False)
+
+
+def require_root() -> None:
+    if os.geteuid() != 0:
+        raise PermissionError("the production installation must be run as root")
+
+
+def validate_source(install_systemd_service: bool) -> None:
+    for relative_path in APPLICATION_FILES:
+        source = PROJECT_ROOT / relative_path
+        if not source.is_file():
+            raise FileNotFoundError(f"application file not found: {source}")
+
+    service_unit = PROJECT_ROOT / "systemd" / DAkbar.SERVICE_NAME
+    if install_systemd_service and not service_unit.is_file():
+        raise FileNotFoundError(f"systemd unit not found: {service_unit}")
+
+
+def ensure_service_account(prefix: Path) -> None:
+    try:
+        grp.getgrnam(DAkbar.SERVICE_GROUP)
+    except KeyError:
+        run("groupadd", "--system", DAkbar.SERVICE_GROUP)
+
+    try:
+        pwd.getpwnam(DAkbar.SERVICE_USER)
+    except KeyError:
+        run(
+            "useradd",
+            "--system",
+            "--gid",
+            DAkbar.SERVICE_GROUP,
+            "--home-dir",
+            prefix,
+            "--shell",
+            "/usr/sbin/nologin",
+            DAkbar.SERVICE_USER,
+        )
+
+
+def install_application(prefix: Path) -> None:
+    prefix.mkdir(parents=True, exist_ok=True, mode=0o755)
+    prefix.chmod(0o755)
+
+    # Application packages are replaced as a unit so removed or renamed source
+    # files cannot linger after an update. The virtual environment is separate.
+    for package in {path.parts[0] for path in APPLICATION_FILES}:
+        destination = prefix / package
+        if destination.exists():
+            shutil.rmtree(destination)
+
+    for relative_path in APPLICATION_FILES:
+        source = PROJECT_ROOT / relative_path
+        destination = prefix / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        destination.parent.chmod(0o755)
+        shutil.copy2(source, destination)
+        destination.chmod(0o644)
+
+    for relative_path in DEPENDENCY_FILES:
+        source = PROJECT_ROOT / relative_path
+        if source.is_file():
+            destination = prefix / relative_path
+            shutil.copy2(source, destination)
+            destination.chmod(0o644)
+
+
+def install_environment(prefix: Path, skip_dependencies: bool) -> None:
+    environment = prefix / DAkbar.VENV_DIRECTORY
+    venv.EnvBuilder(with_pip=True, upgrade_deps=False).create(environment)
+
+    requirements = prefix / "requirements.txt"
+    if requirements.is_file() and not skip_dependencies:
+        run(environment / "bin" / "python", "-m", "pip", "install", "-r", requirements)
+
+
+def install_service(prefix: Path, enable: bool, start: bool) -> None:
+    if prefix != DAkbar.INSTALL_ROOT:
+        raise ValueError(
+            "systemd installation requires the production prefix; use --no-service "
+            "with an alternate prefix"
+        )
+
+    source = PROJECT_ROOT / "systemd" / DAkbar.SERVICE_NAME
+    destination = SYSTEMD_DIRECTORY / DAkbar.SERVICE_NAME
+    shutil.copy2(source, destination)
+    destination.chmod(0o644)
+    run("systemctl", "daemon-reload")
+
+    if enable:
+        run("systemctl", "enable", DAkbar.SERVICE_NAME)
+    if start:
+        run("systemctl", "restart", DAkbar.SERVICE_NAME)
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        prefix = validate_prefix(args.prefix)
+        if args.no_service and (args.enable or args.start):
+            raise ValueError("--enable and --start cannot be used with --no-service")
+        if not args.no_service and prefix != DAkbar.INSTALL_ROOT:
+            raise ValueError(
+                "systemd installation requires /opt/akbar; use --no-service "
+                "with an alternate prefix"
+            )
+        validate_source(install_systemd_service=not args.no_service)
+
+        if prefix == DAkbar.INSTALL_ROOT:
+            require_root()
+        if not args.no_service:
+            ensure_service_account(prefix)
+
+        install_application(prefix)
+        install_environment(prefix, args.skip_dependencies)
+
+        if not args.no_service:
+            install_service(prefix, args.enable, args.start)
+    except (FileNotFoundError, PermissionError, ValueError, subprocess.CalledProcessError) as error:
+        print(f"install.py: {error}", file=sys.stderr)
+        return 1
+
+    print(f"Akbar installed in {prefix}")
+    if not args.start and not args.no_service:
+        print(f"Start it with: systemctl start {DAkbar.SERVICE_NAME}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
