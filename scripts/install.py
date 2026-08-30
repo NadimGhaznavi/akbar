@@ -62,6 +62,36 @@ APPLICATION_FILES = (
         Path("experiment/ExperimentState.py"),
         Path("experiment/ExperimentState.py"),
     ),
+    (Path("snake_lab/__init__.py"), Path("snake_lab/__init__.py")),
+    (
+        Path("snake_lab/SnakeExperiment.py"),
+        Path("snake_lab/SnakeExperiment.py"),
+    ),
+    (Path("snake_lab/game/__init__.py"), Path("snake_lab/game/__init__.py")),
+    (
+        Path("snake_lab/game/SnakeGame.py"),
+        Path("snake_lab/game/SnakeGame.py"),
+    ),
+    (
+        Path("snake_lab/models/__init__.py"),
+        Path("snake_lab/models/__init__.py"),
+    ),
+    (
+        Path("snake_lab/models/LinearQModel.py"),
+        Path("snake_lab/models/LinearQModel.py"),
+    ),
+    (
+        Path("snake_lab/training/__init__.py"),
+        Path("snake_lab/training/__init__.py"),
+    ),
+    (
+        Path("snake_lab/training/QTrainer.py"),
+        Path("snake_lab/training/QTrainer.py"),
+    ),
+    (
+        Path("snake_lab/training/ReplayMemory.py"),
+        Path("snake_lab/training/ReplayMemory.py"),
+    ),
     (Path("tools/tools.py"), Path("tools.py")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))

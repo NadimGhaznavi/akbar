@@ -70,7 +70,14 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
             self.repository,
             control_endpoint=self.control_endpoint,
             telemetry_endpoint=self.telemetry_endpoint,
-            default_config=ExperimentConfig(epochs=3, epoch_delay=0.01, seed=7),
+            default_config=ExperimentConfig(
+                epochs=3,
+                seed=7,
+                board_size=8,
+                max_moves_multiplier=10,
+                replay_capacity=100,
+                batch_size=8,
+            ),
         )
         self.server_task = asyncio.create_task(self.server.run())
         self.client = ExperimentClient(self.control_endpoint, timeout_ms=1000)
@@ -141,6 +148,14 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(telemetry), 3)
 
     async def test_stop_active_experiment(self) -> None:
+        self.server.default_config = ExperimentConfig(
+            epochs=1_000,
+            seed=7,
+            board_size=8,
+            max_moves_multiplier=10,
+            replay_capacity=100,
+            batch_size=8,
+        )
         accepted = await self.request(
             MessageType.START_EXPERIMENT,
         )
