@@ -39,6 +39,7 @@ APPLICATION_FILES = (
     ),
     (Path("server/__init__.py"), Path("server/__init__.py")),
     (Path("server/AkbarServer.py"), Path("server/AkbarServer.py")),
+    (Path("server/mcp.json"), Path("server/mcp.json")),
     (Path("agent/__init__.py"), Path("agent/__init__.py")),
     (Path("agent/AkbarAgent.py"), Path("agent/AkbarAgent.py")),
     (Path("agent/AgentServer.py"), Path("agent/AgentServer.py")),
