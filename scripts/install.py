@@ -22,10 +22,12 @@ from constants.DAkbar import DAkbar  # noqa: E402
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
 APPLICATION_FILES = (
-    Path("constants/__init__.py"),
-    Path("constants/DAkbar.py"),
-    Path("server/__init__.py"),
-    Path("server/AkbarServer.py"),
+    (Path("constants/__init__.py"), Path("constants/__init__.py")),
+    (Path("constants/DAkbar.py"), Path("constants/DAkbar.py")),
+    (Path("server/__init__.py"), Path("server/__init__.py")),
+    (Path("server/AkbarServer.py"), Path("server/AkbarServer.py")),
+    (Path("server/mcp.json"), Path("server/mcp.json")),
+    (Path("tools/tools.py"), Path("tools.py")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
 
@@ -80,8 +82,8 @@ def require_root() -> None:
 
 
 def validate_source(install_systemd_service: bool) -> None:
-    for relative_path in APPLICATION_FILES:
-        source = PROJECT_ROOT / relative_path
+    for source_path, _ in APPLICATION_FILES:
+        source = PROJECT_ROOT / source_path
         if not source.is_file():
             raise FileNotFoundError(f"application file not found: {source}")
 
@@ -118,14 +120,17 @@ def install_application(prefix: Path) -> None:
 
     # Application packages are replaced as a unit so removed or renamed source
     # files cannot linger after an update. The virtual environment is separate.
-    for package in {path.parts[0] for path in APPLICATION_FILES}:
-        destination = prefix / package
-        if destination.exists():
+    installation_targets = {destination.parts[0] for _, destination in APPLICATION_FILES}
+    for target in installation_targets:
+        destination = prefix / target
+        if destination.is_dir():
             shutil.rmtree(destination)
+        elif destination.exists() or destination.is_symlink():
+            destination.unlink()
 
-    for relative_path in APPLICATION_FILES:
-        source = PROJECT_ROOT / relative_path
-        destination = prefix / relative_path
+    for source_path, destination_path in APPLICATION_FILES:
+        source = PROJECT_ROOT / source_path
+        destination = prefix / destination_path
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
         destination.parent.chmod(0o755)
         shutil.copy2(source, destination)

@@ -12,6 +12,7 @@ readonly DEV_BRANCH="dev"
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly CHANGELOG="${PROJECT_DIR}/CHANGELOG.md"
+readonly CONSTANTS_FILE="${PROJECT_DIR}/constants/DAkbar.py"
 
 CURRENT_BRANCH=""
 NEW_VERSION=""
@@ -75,6 +76,9 @@ preflight() {
     [[ -f "${CHANGELOG}" ]] || die "CHANGELOG.md is required."
     grep -Fxq '## [Unreleased]' "${CHANGELOG}" ||
         die "CHANGELOG.md must contain an '## [Unreleased]' heading."
+    [[ -f "${CONSTANTS_FILE}" ]] || die "constants/DAkbar.py is required."
+    grep -Eq '^    VERSION: Final\[str\] = "[^"]+"$' "${CONSTANTS_FILE}" ||
+        die "DAkbar.VERSION is missing or malformed."
     ref_exists "refs/heads/${MAIN_BRANCH}" || die "Local branch '${MAIN_BRANCH}' is missing."
     ref_exists "refs/heads/${DEV_BRANCH}" || die "Local branch '${DEV_BRANCH}' is missing."
 
@@ -141,6 +145,26 @@ update_changelog() {
     git commit -m "Update changelog for ${TAG_NAME}"
 }
 
+update_project_version() {
+    local temp_file
+    temp_file=$(mktemp "${PROJECT_DIR}/constants/.DAkbar.py.XXXXXX")
+
+    awk -v version="${NEW_VERSION}" '
+        /^    VERSION: Final\[str\] = "[^"]+"$/ {
+            print "    VERSION: Final[str] = \"" version "\""
+            next
+        }
+        { print }
+    ' "${CONSTANTS_FILE}" >"${temp_file}" || {
+        rm -f -- "${temp_file}"
+        die "Failed to update DAkbar.VERSION."
+    }
+
+    chmod --reference="${CONSTANTS_FILE}" "${temp_file}"
+    mv -- "${temp_file}" "${CONSTANTS_FILE}"
+    git add -- constants/DAkbar.py
+}
+
 merge_no_ff() {
     local source=$1 message=$2
     info "Merging '${source}' into '$(git branch --show-current)'..."
@@ -150,6 +174,7 @@ merge_no_ff() {
 create_release() {
     git switch "${DEV_BRANCH}"
     merge_no_ff "${CURRENT_BRANCH}" "Merge ${CURRENT_BRANCH} for ${TAG_NAME}"
+    update_project_version
     update_changelog
 
     git switch "${MAIN_BRANCH}"
