@@ -2,8 +2,8 @@ from typing import Final
 
 
 class DScheduler:
-    INITIAL_DELAY_SECONDS: Final[int] = 60
-    INTERVAL_SECONDS: Final[int] = 3_600
+    INITIAL_DELAY_SECONDS: Final[int] = 15
+    INTERVAL_SECONDS: Final[int] = 15
     PROMPT: Final[str] = (
         "Continue the AI Snake Lab investigation. First inspect the current "
         "experiment state. If an experiment is queued or running, report its "
