@@ -125,15 +125,23 @@ class LlamaPlanner:
                     },
                 },
                 "max_tokens": DScheduler.MAX_COMPLETION_TOKENS,
+                "reasoning_budget": DScheduler.REASONING_BUDGET,
                 "stream": False,
             },
         )
         response.raise_for_status()
+        choice: Any = None
         message: Any = None
         try:
             payload = response.json()
-            message = payload["choices"][0]["message"]
-            proposal_data = _decode_json_object(message.get("content"))
+            choice = payload["choices"][0]
+            message = choice["message"]
+            content = message["content"]
+            if not isinstance(content, str) or not content:
+                raise PlanningError("proposal content is empty")
+            proposal_data = json.loads(content)
+            if not isinstance(proposal_data, dict):
+                raise PlanningError("inference proposal must be a JSON object")
         except (
             KeyError,
             IndexError,
@@ -141,50 +149,25 @@ class LlamaPlanner:
             json.JSONDecodeError,
             PlanningError,
         ) as error:
-            preview = None
-            if isinstance(message, dict):
-                preview = repr(message.get("content"))[:500]
-            LOGGER.error("invalid proposal response content: %s", preview)
+            content = message.get("content") if isinstance(message, dict) else None
+            reasoning = (
+                message.get("reasoning_content") if isinstance(message, dict) else None
+            )
+            finish_reason = (
+                choice.get("finish_reason") if isinstance(choice, dict) else None
+            )
+            LOGGER.error(
+                "invalid proposal response: finish_reason=%r content_length=%d "
+                "reasoning_length=%d content_preview=%r",
+                finish_reason,
+                len(content) if isinstance(content, str) else 0,
+                len(reasoning) if isinstance(reasoning, str) else 0,
+                content[:200] if isinstance(content, str) else None,
+            )
             raise PlanningError(
                 "inference service returned invalid proposal JSON"
             ) from error
         return ExperimentProposal.from_dict(proposal_data, config)
-
-
-def _decode_json_object(content: Any) -> dict[str, Any]:
-    if isinstance(content, list):
-        content = "".join(
-            item.get("text", "")
-            for item in content
-            if isinstance(item, dict) and item.get("type") == "text"
-        )
-    if not isinstance(content, str) or not content.strip():
-        raise PlanningError("proposal content is empty")
-
-    text = content.strip()
-    if text.startswith("```") and text.endswith("```"):
-        first_newline = text.find("\n")
-        text = text[first_newline + 1 : -3].strip()
-    try:
-        decoded = json.loads(text)
-    except json.JSONDecodeError:
-        decoder = json.JSONDecoder()
-        candidates = []
-        for position, character in enumerate(text):
-            if character != "{":
-                continue
-            try:
-                candidate, _end = decoder.raw_decode(text[position:])
-            except json.JSONDecodeError:
-                continue
-            if isinstance(candidate, dict):
-                candidates.append(candidate)
-        if not candidates:
-            raise PlanningError("proposal content contains no JSON object")
-        decoded = candidates[-1]
-    if not isinstance(decoded, dict):
-        raise PlanningError("inference proposal must be a JSON object")
-    return decoded
 
 
 class Scheduler:
