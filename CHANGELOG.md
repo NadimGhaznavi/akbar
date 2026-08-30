@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Connected `llama-server` to Akbar's installed MCP configuration so the model
+  server can discover and expose Akbar's MCP tools.
+- Release headings now include the local release time.
+
+---
+
 ## [0.2.0] - 2026-08-30
 
 - Release script enhancements
