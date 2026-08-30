@@ -27,7 +27,7 @@ sudo python3 scripts/install.py --enable --start
 Use the trusted menu-driven experiment interface after installation:
 
 ```sh
-/opt/akbar/bin/akbar-cli
+/opt/akbar/scripts/akbar-cli.py
 ```
 
 The CLI talks directly to the experiment service, displays only the final four

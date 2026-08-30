@@ -91,7 +91,9 @@ APPLICATION_FILES = (
         Path("snake_lab/training/ReplayMemory.py"),
     ),
     (Path("tools/tools.py"), Path("tools.py")),
-    (Path("tools/cli.py"), Path("bin/akbar-cli")),
+    (Path("scripts/akbar-cli.py"), Path("scripts/akbar-cli.py")),
+    (Path("scripts/install.py"), Path("scripts/install.py")),
+    (Path("scripts/upgrade.py"), Path("scripts/upgrade.py")),
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
 
@@ -314,7 +316,9 @@ def install_application(prefix: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
         destination.parent.chmod(0o755)
         shutil.copy2(source, destination)
-        destination.chmod(0o755 if destination_path == Path("bin/akbar-cli") else 0o644)
+        destination.chmod(
+            0o755 if destination_path.parent == Path("scripts") else 0o644
+        )
 
     for relative_path in DEPENDENCY_FILES:
         source = PROJECT_ROOT / relative_path

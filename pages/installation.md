@@ -55,9 +55,12 @@ The application and its virtual environment are installed under `/opt/akbar`:
 ```text
 /opt/akbar/
 ├── .venv/
-├── bin/akbar-cli
 ├── constants/
 ├── experiment/
+├── scripts/
+│   ├── akbar-cli.py
+│   ├── install.py
+│   └── upgrade.py
 ├── server/
 ├── snake_lab/
 ├── requirements.txt
@@ -69,7 +72,7 @@ The application and its virtual environment are installed under `/opt/akbar`:
 Run the administrative experiment interface with:
 
 ```sh
-/opt/akbar/bin/akbar-cli
+/opt/akbar/scripts/akbar-cli.py
 ```
 
 The menu uses the same experiment control plane as Akbar's MCP tools, but shows
