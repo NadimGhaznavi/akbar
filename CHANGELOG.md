@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Encoded an evidence-driven scheduled workflow that checks active work,
   reviews historical results, justifies configuration changes, starts at most
   one experiment, and persists the decision rationale with the agent turn.
+- Set scheduler startup and recurring continuation checks to 15 seconds, with
+  MariaDB duplicate suppression preventing queued agent-turn buildup.
 - Exposed a concise operational architecture guide through Akbar's numbered MCP
   self-documentation tools.
 

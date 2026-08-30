@@ -48,11 +48,11 @@ installation, run:
 sudo python3 scripts/install.py --enable --start
 ```
 
-The scheduler waits 60 seconds after startup and then attempts to enqueue a
-continuation turn once per hour. MariaDB rejects the tick when a turn is already
-queued or running. The independent agent worker polls for queued work every five
-seconds and gives each turn a 30-minute deadline. These defaults can be
-overridden through the corresponding `AKBAR_SCHEDULER_*` and `AKBAR_AGENT_*`
+The scheduler waits 15 seconds after startup and then attempts to enqueue a
+continuation turn every 15 seconds. MariaDB rejects the tick when a turn is
+already queued or running. The independent agent worker polls for queued work
+every five seconds and gives each turn a 30-minute deadline. These defaults can
+be overridden through the corresponding `AKBAR_SCHEDULER_*` and `AKBAR_AGENT_*`
 unit environment variables.
 
 ## Installed files

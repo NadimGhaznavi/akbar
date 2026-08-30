@@ -4,6 +4,7 @@ import asyncio
 import unittest
 from typing import Any
 
+from constants.DScheduler import DScheduler
 from scheduler.SchedulerServer import Scheduler
 
 
@@ -64,6 +65,10 @@ class SchedulerTest(unittest.TestCase):
         self.assertIn("review recent completed results", prompt)
         self.assertIn("start exactly one experiment", prompt)
         self.assertIn("rationale", prompt)
+
+    def test_default_schedule_pokes_every_fifteen_seconds(self) -> None:
+        self.assertEqual(DScheduler.INITIAL_DELAY_SECONDS, 15)
+        self.assertEqual(DScheduler.INTERVAL_SECONDS, 15)
 
 
 if __name__ == "__main__":
