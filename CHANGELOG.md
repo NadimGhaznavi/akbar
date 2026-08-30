@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-08-30 @ 05:38
+
 ## [0.10.2] - 2026-08-30 @ 05:31
 
 ## [0.10.1] - 2026-08-30 @ 05:21
@@ -39,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MariaDB duplicate suppression preventing queued agent-turn buildup.
 - Exposed a concise operational architecture guide through Akbar's numbered MCP
   self-documentation tools.
+- Made the administrative CLI a strictly read-only observability interface and
+  added active-configuration and recent-result views.
 
 ### Removed
 
