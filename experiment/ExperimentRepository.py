@@ -140,7 +140,8 @@ class MariaDBExperimentRepository:
             except Exception:
                 connection.rollback()
                 raise
-        return seed
+        # return seed
+        return 1970
 
     def load_config(self) -> dict[str, Any] | None:
         with self._connect() as connection, connection.cursor() as cursor:
