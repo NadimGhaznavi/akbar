@@ -25,7 +25,8 @@ Each completed run stores a versioned result document under its `experiment_id`.
 The document contains the resolved configuration, aggregate metrics, and timing
 information. Raw per-epoch telemetry is not written to the result record.
 
-The first runner uses one fixed, deterministic, bounded configuration owned by
-the experiment service. `start_experiment` accepts no configuration input. This
-establishes the complete service, persistence, control, and telemetry path before
-configuration management and the AI Snake Lab simulation are introduced.
+The runner uses one fixed, deterministic, bounded configuration owned by the
+experiment service. `start_experiment` accepts no configuration input. A
+headless Snake game, linear NumPy Q-model, and bounded replay memory execute
+entirely in process memory. No model checkpoints, replay snapshots, CSV files,
+or per-epoch logs are written to disk.

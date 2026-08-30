@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   integration tests, and experiment architecture documentation.
 - Versioned run-result documents stored and retrieved by experiment ID, with
   resolved configuration, aggregate metrics, and timing information.
+- Headless deterministic Snake gameplay with an in-memory NumPy Q-model,
+  bounded replay training, and real per-epoch score and loss telemetry.
 
 ---
 
