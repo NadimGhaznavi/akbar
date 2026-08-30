@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-30 @ 19:55
+
 ### Added
 
 - Added deterministic 27-configuration hyperparameter grids across five fixed
