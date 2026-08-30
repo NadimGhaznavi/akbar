@@ -141,7 +141,11 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(len(http.requests), 1)
         request = http.requests[0][1]
         self.assertEqual(request["response_format"]["type"], "json_schema")
-        self.assertEqual(request["reasoning_budget"], 0)
+        self.assertEqual(
+            request["chat_template_kwargs"],
+            {"enable_thinking": False},
+        )
+        self.assertNotIn("reasoning_budget", request)
         self.assertIn("previous_experiments", request["messages"][1]["content"])
 
     def test_planner_rejects_empty_final_content(self) -> None:
