@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from constants.DAkbar import DAkbar  # noqa: E402
+from constants.DDatabase import DDatabase  # noqa: E402
 
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
@@ -46,8 +47,8 @@ def purge_database() -> None:
         )
 
     sql = f"""
-DROP DATABASE IF EXISTS `{DAkbar.DATABASE_NAME}`;
-DROP USER IF EXISTS '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}';
+DROP DATABASE IF EXISTS `{DDatabase.DB_NAME}`;
+DROP USER IF EXISTS '{DDatabase.USERNAME}'@'{DDatabase.HOST}';
 """
     subprocess.run(
         [mariadb, "--protocol=socket", "--batch"],
@@ -55,8 +56,8 @@ DROP USER IF EXISTS '{DAkbar.DATABASE_USER}'@'{DAkbar.DATABASE_HOST}';
         text=True,
         check=True,
     )
-    if DAkbar.DATABASE_ENV_FILE.exists():
-        DAkbar.DATABASE_ENV_FILE.unlink()
+    if DDatabase.ENV_FILE.exists():
+        DDatabase.ENV_FILE.unlink()
     if DAkbar.CONFIG_DIRECTORY.is_dir():
         DAkbar.CONFIG_DIRECTORY.rmdir()
 
@@ -90,9 +91,9 @@ def main() -> int:
         except (FileNotFoundError, OSError, subprocess.CalledProcessError) as error:
             print(f"uninstall.py: {error}", file=sys.stderr)
             return 1
-    elif DAkbar.DATABASE_ENV_FILE.is_file():
-        DAkbar.DATABASE_ENV_FILE.chmod(0o600)
-        shutil.chown(DAkbar.DATABASE_ENV_FILE, user="root", group="root")
+    elif DDatabase.ENV_FILE.is_file():
+        DDatabase.ENV_FILE.chmod(0o600)
+        shutil.chown(DDatabase.ENV_FILE, user="root", group="root")
         DAkbar.CONFIG_DIRECTORY.chmod(0o700)
         shutil.chown(DAkbar.CONFIG_DIRECTORY, user="root", group="root")
 

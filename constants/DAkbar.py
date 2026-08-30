@@ -14,11 +14,6 @@ class DAkbar:
     SERVICE_USER: Final[str] = "akbar"
     SERVICE_GROUP: Final[str] = "akbar"
     CONFIG_DIRECTORY: Final[Path] = Path("/etc/akbar")
-    DATABASE_ENV_FILE: Final[Path] = CONFIG_DIRECTORY / "database.env"
-    DATABASE_HOST: Final[str] = "localhost"
-    DATABASE_PORT: Final[int] = 3306
-    DATABASE_NAME: Final[str] = "akbar"
-    DATABASE_USER: Final[str] = "akbar"
     LLAMA_SERVER: Final[Path] = Path("/opt/dev/llama.cpp/build/bin/llama-server")
     MODEL: Final[Path] = Path(
         "/opt/dev/models/quantized/Qwen3.5-4B-Q4_K_M.gguf"
