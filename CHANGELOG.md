@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-30 @ 06:39
+
+### Changed
+
+- Made scheduled proposal decoding accept plain, fenced, text-part, or
+  prose-wrapped JSON from llama.cpp, with a bounded response preview in error
+  logs when no proposal object can be recovered.
+
+---
+
 ## [0.11.0] - 2026-08-30 @ 06:33
 
 ### Added
