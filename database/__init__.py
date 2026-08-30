@@ -1,0 +1,1 @@
+"""Shared MariaDB connection boundary."""

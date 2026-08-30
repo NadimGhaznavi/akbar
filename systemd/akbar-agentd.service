@@ -1,0 +1,22 @@
+[Unit]
+Description=Akbar Agent Worker
+After=akbar.service akbar-experimentd.service mariadb.service
+Wants=akbar.service akbar-experimentd.service mariadb.service
+
+[Service]
+Type=simple
+User=akbar
+Group=akbar
+WorkingDirectory=/opt/akbar
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/akbar/database.env
+ExecStart=/opt/akbar/.venv/bin/python -m agent.AgentServer
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
