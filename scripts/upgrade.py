@@ -46,6 +46,8 @@ def run(*command: str | Path, check: bool = True) -> None:
 def validate_installation() -> None:
     if os.geteuid() != 0:
         raise PermissionError("upgrade must be run as root")
+    if PROJECT_ROOT.resolve() == DAkbar.INSTALL_ROOT.resolve():
+        raise ValueError("run upgrade.py from an updated source checkout")
     if not DAkbar.INSTALL_ROOT.is_dir() or DAkbar.INSTALL_ROOT.is_symlink():
         raise FileNotFoundError(
             f"Akbar is not safely installed in {DAkbar.INSTALL_ROOT}"

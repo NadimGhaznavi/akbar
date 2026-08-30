@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Condensed the architecture guide into a component and boundary reference.
+- Made `scripts/akbar-cli.py` the canonical CLI source and installed path.
+- Added the CLI, installer, and upgrade entry points to the installed
+  application manifest under `/opt/akbar/scripts`.
+
+### Removed
+
+- The indirect `tools/cli.py` source location.
+
+---
+
 ## [0.6.0] - 2026-08-30 @ 02:14
 
 ### Changed
