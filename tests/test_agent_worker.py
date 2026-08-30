@@ -36,12 +36,26 @@ class MemoryAgentRepository:
 
 
 class FakeAgent:
-    async def run(self, prompt: str) -> str:
+    def __init__(self) -> None:
+        self.require_experiment_resolution: bool | None = None
+
+    async def run(
+        self,
+        prompt: str,
+        *,
+        require_experiment_resolution: bool = False,
+    ) -> str:
+        self.require_experiment_resolution = require_experiment_resolution
         return f"Handled: {prompt}"
 
 
 class FailingAgent:
-    async def run(self, prompt: str) -> str:
+    async def run(
+        self,
+        prompt: str,
+        *,
+        require_experiment_resolution: bool = False,
+    ) -> str:
         raise OSError("model unavailable")
 
 
@@ -51,13 +65,15 @@ class AgentWorkerTest(unittest.TestCase):
             {"turn_id": "turn-1", "source": "scheduler", "prompt": "Continue"}
         )
 
-        processed = asyncio.run(AgentWorker(repository, FakeAgent()).process_one())
+        agent = FakeAgent()
+        processed = asyncio.run(AgentWorker(repository, agent).process_one())
 
         self.assertTrue(processed)
         self.assertEqual(
             repository.finished,
             [("turn-1", "completed", "Handled: Continue", None)],
         )
+        self.assertTrue(agent.require_experiment_resolution)
 
     def test_worker_persists_agent_failure(self) -> None:
         repository = MemoryAgentRepository(
