@@ -74,8 +74,13 @@ class FakeHTTPClient:
 
 
 class FakeExperimentControl:
-    def __init__(self, status: str = "completed") -> None:
+    def __init__(
+        self,
+        status: str = "completed",
+        experiment_count: int = 1,
+    ) -> None:
         self.status = status
+        self.experiment_count = experiment_count
         self.calls: list[tuple[MessageType, dict[str, Any] | None]] = []
 
     def request(
@@ -87,6 +92,8 @@ class FakeExperimentControl:
         self.calls.append((message_type, payload))
         if message_type is MessageType.GET_EXPERIMENT_STATUS:
             return {"status": self.status}
+        if message_type is MessageType.GET_EXPERIMENT_COUNT:
+            return {"experiment_count": self.experiment_count}
         if message_type is MessageType.GET_EXPERIMENT_CONFIG:
             return {
                 "epochs": 50,
@@ -360,6 +367,7 @@ class SchedulerTest(unittest.TestCase):
             experiment.calls,
             [
                 (MessageType.GET_EXPERIMENT_STATUS, None),
+                (MessageType.GET_EXPERIMENT_COUNT, None),
                 (MessageType.GET_EXPERIMENT_CONFIG, None),
                 (
                     MessageType.EXECUTE_READ_QUERY,
@@ -385,6 +393,35 @@ class SchedulerTest(unittest.TestCase):
         )
         self.assertEqual(plans.started, [("plan-1", "experiment-2")])
         self.assertIn("rationale", plans.proposals[0][0])
+
+    def test_fresh_install_starts_default_baseline_without_planner(self) -> None:
+        experiment = FakeExperimentControl(experiment_count=0)
+        planner = FakePlanner()
+        plans = MemoryPlanningRepository()
+
+        experiment_id = asyncio.run(
+            Scheduler(experiment, planner, plans).run_once()
+        )
+
+        self.assertEqual(experiment_id, "experiment-2")
+        self.assertEqual(planner.inputs, [])
+        self.assertEqual(plans.proposals, [])
+        self.assertEqual(
+            experiment.calls,
+            [
+                (MessageType.GET_EXPERIMENT_STATUS, None),
+                (MessageType.GET_EXPERIMENT_COUNT, None),
+                (MessageType.GET_EXPERIMENT_CONFIG, None),
+                (
+                    MessageType.START_EXPERIMENT,
+                    {
+                        "learning_rate": 0.001,
+                        "epsilon_start": 0.9,
+                        "epsilon_decay": 0.995,
+                    },
+                ),
+            ],
+        )
 
     def test_active_experiment_skips_planning(self) -> None:
         experiment = FakeExperimentControl(status="running")
