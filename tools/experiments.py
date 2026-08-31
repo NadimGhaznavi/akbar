@@ -17,7 +17,7 @@ def start_experiment(
     epsilon_start: float,
     epsilon_decay: float,
 ) -> dict:
-    """Start an 81-simulation experiment around three submitted values."""
+    """Start a 27-simulation experiment around three submitted values."""
     return ExperimentClient().request(
         MessageType.START_EXPERIMENT,
         {

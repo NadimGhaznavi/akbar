@@ -113,7 +113,7 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
     async def request(self, message_type: MessageType, **kwargs) -> dict[str, Any]:
         return await asyncio.to_thread(self.client.request, message_type, **kwargs)
 
-    async def test_batch_persists_81_separate_simulation_results(self) -> None:
+    async def test_batch_persists_27_separate_simulation_results(self) -> None:
         accepted = await self.request(
             MessageType.START_EXPERIMENT,
             payload={"learning_rate": 0.001, "epsilon_start": 0.9,
@@ -126,12 +126,13 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
             if status["status"] == "completed": break
             await asyncio.sleep(0.01)
         self.assertEqual(status["status"], "completed")
-        self.assertEqual(len(self.repository.simulations), 81)
+        self.assertEqual(len(self.repository.simulations), 27)
         self.assertTrue(all(row["result"] for row in self.repository.simulations.values()))
         self.assertIsNone(self.repository.records[experiment_id]["result"])
         methodology = self.repository.records[experiment_id]["config"]["methodology"]
-        self.assertEqual(methodology["simulation_count"], 81)
-        self.assertEqual(methodology["seeds"], [1970, 1971, 1972])
+        self.assertEqual(methodology["version"], 2)
+        self.assertEqual(methodology["simulation_count"], 27)
+        self.assertEqual(methodology["seeds"], [1970])
 
     async def test_schema_and_open_ended_query_api(self) -> None:
         schema = await self.request(MessageType.GET_DATABASE_SCHEMA)
@@ -157,13 +158,13 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ExperimentDesignTest(unittest.TestCase):
-    def test_design_has_27_configurations_across_three_fixed_seeds(self) -> None:
+    def test_design_has_27_configurations_with_one_fixed_seed(self) -> None:
         configs = build_simulation_configs(ExperimentConfig(epsilon_start=0.9))
         combinations = {(item.learning_rate, item.epsilon_start,
                          item.epsilon_decay) for item in configs}
-        self.assertEqual(len(configs), 81)
+        self.assertEqual(len(configs), 27)
         self.assertEqual(len(combinations), 27)
-        self.assertEqual({item.seed for item in configs}, {1970, 1971, 1972})
+        self.assertEqual({item.seed for item in configs}, {1970})
         self.assertEqual({item.epochs for item in configs}, {1500})
 
     def test_read_query_validation_rejects_writes_and_filesystem_access(self) -> None:

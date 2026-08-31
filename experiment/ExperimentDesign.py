@@ -31,7 +31,7 @@ def _bounded_variants(
 
 
 def build_simulation_configs(baseline: ExperimentConfig) -> list[ExperimentConfig]:
-    """Return the 3 x 3 x 3 hyperparameter grid for all fixed seeds.
+    """Return the 3 x 3 x 3 hyperparameter grid for the fixed seed.
 
     Epsilon decay is varied in terms of the amount decayed (``1 - decay``),
     which keeps useful values near one valid and symmetrically perturbed.

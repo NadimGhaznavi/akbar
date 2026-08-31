@@ -125,8 +125,8 @@ reason, and SQL evidence are persisted before the experiment is launched.
 
 The experiment service snapshots the three submitted hyperparameters and creates
 a lifecycle record. It varies each value by five percent to form a 3 x 3 x 3
-grid, then runs all 27 configurations with seeds 1970 through 1972. The resulting
-81 simulations each run for exactly 1,500 epochs and persist separate raw result
+grid, then runs all 27 configurations with the fixed seed 1970. The resulting
+27 simulations each run for exactly 1,500 epochs and persist separate raw result
 rows. Epsilon decay is perturbed in terms of `1 - epsilon_decay`, preserving
 useful resolution near one.
 
@@ -151,7 +151,7 @@ simulation result only after that simulation leaves its hot loop.
 - MariaDB is accessed at experiment lifecycle boundaries and for explicit
   historical queries, never within or between simulation epochs.
 - At most one experiment may be queued or running.
-- One valid planning proposal launches one 81-simulation experiment.
+- One valid planning proposal launches one 27-simulation experiment.
 - Akbar may issue arbitrary single-statement read-only SQL for analysis; the
   experiment layer does not rank or aggregate results for him.
 - Interactive chat and scheduled planning share the inference server but have

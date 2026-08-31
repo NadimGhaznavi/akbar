@@ -178,7 +178,7 @@ class SchedulerTest(unittest.TestCase):
                 return {"tables": {"simulation_runs": [], "experiments": []}}
             if "FROM experiments" in arguments["sql"]:
                 return {"rows": [], "returned": 0}
-            return {"rows": [{"count": 81}], "returned": 1}
+            return {"rows": [{"count": 27}], "returned": 1}
 
         decision = asyncio.run(planner.propose(config, execute_tool))
 
@@ -215,7 +215,7 @@ class SchedulerTest(unittest.TestCase):
         )
 
         self.assertEqual(homepage["url"], "/")
-        self.assertIn("Akbar Orientation", homepage["content"])
+        self.assertIn("/snake-lab/", homepage["content"])
         self.assertIn("error", rejected)
 
     def test_planner_rejects_empty_final_content(self) -> None:
@@ -332,7 +332,7 @@ class SchedulerTest(unittest.TestCase):
                     "rows": [{"experiment_id": "experiment-1"}],
                     "returned": 1,
                 }
-            return {"rows": [{"count": 81}], "returned": 1}
+            return {"rows": [{"count": 27}], "returned": 1}
 
         decision = asyncio.run(planner.propose(config, execute_tool))
 
