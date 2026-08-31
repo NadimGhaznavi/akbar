@@ -2,6 +2,7 @@ from typing import Final
 
 
 class DExperiment:
+    METHODOLOGY_VERSION: Final[int] = 1
     PROTOCOL_VERSION: Final[int] = 1
     CONTROL_HOST: Final[str] = "127.0.0.1"
     CONTROL_PORT: Final[int] = 51971
@@ -22,6 +23,7 @@ class DExperiment:
     MAX_LEARNING_RATE: Final[float] = 0.1
     MAX_QUERY_ROWS: Final[int] = 10_000
     DEFAULT_QUERY_ROWS: Final[int] = 1_000
+    MAX_QUERY_RESULT_BYTES: Final[int] = 32_768
     QUERY_TIMEOUT_SECONDS: Final[int] = 5
 
     CONTROL_ENDPOINT: Final[str] = f"tcp://{CONTROL_HOST}:{CONTROL_PORT}"

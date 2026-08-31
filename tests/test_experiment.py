@@ -11,7 +11,10 @@ from experiment.ExperimentClient import ExperimentClient, ExperimentClientError
 from experiment.ExperimentConfig import ExperimentConfig
 from experiment.ExperimentDesign import build_simulation_configs
 from experiment.ExperimentProtocol import MessageType
-from experiment.ExperimentRepository import validate_read_query
+from experiment.ExperimentRepository import (
+    validate_query_result_size,
+    validate_read_query,
+)
 from experiment.ExperimentServer import ExperimentServer
 
 
@@ -177,6 +180,18 @@ class ExperimentDesignTest(unittest.TestCase):
         ):
             with self.subTest(sql=sql), self.assertRaises(ValueError):
                 validate_read_query(sql)
+
+    def test_query_result_length_rejects_large_cells_with_guidance(self) -> None:
+        result = {
+            "columns": ["evidence_json"],
+            "rows": [{"evidence_json": "x" * 40_000}],
+            "returned": 1,
+            "truncated": False,
+        }
+        with self.assertRaisesRegex(ValueError, "JSON_EXTRACT") as raised:
+            validate_query_result_size(result)
+        self.assertIn("evidence_json", str(raised.exception))
+        self.assertIn("32,768 bytes", str(raised.exception))
 
 
 if __name__ == "__main__":

@@ -20,7 +20,10 @@ class UpgradeBoundaryTest(unittest.TestCase):
         self.assertNotIn(Path("agent/AgentServer.py"), destinations)
         self.assertNotIn(Path("orchestration/TurnRepository.py"), destinations)
         self.assertIn(Path("tools/__main__.py"), destinations)
+        self.assertIn(Path("tools/AknetBrowser.py"), destinations)
         self.assertIn(Path("tools/experiments.py"), destinations)
+        self.assertIn(Path("aknet/index.md"), destinations)
+        self.assertIn(Path("aknet/data/sql.md"), destinations)
         self.assertNotIn(Path("tools.py"), destinations)
 
     def test_runtime_replacement_preserves_environment_and_unowned_data(self) -> None:

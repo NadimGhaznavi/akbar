@@ -174,17 +174,26 @@ class SchedulerTest(unittest.TestCase):
 
         async def execute_tool(name, arguments):
             calls.append((name, arguments))
+            if name == "get_database_schema":
+                return {"tables": {"simulation_runs": [], "experiments": []}}
+            if "FROM experiments" in arguments["sql"]:
+                return {"rows": [], "returned": 0}
             return {"rows": [{"count": 81}], "returned": 1}
 
         decision = asyncio.run(planner.propose(config, execute_tool))
 
         self.assertEqual(decision.proposal.learning_rate, 0.0008)
-        self.assertEqual(len(decision.evidence), 2)
+        self.assertEqual(len(decision.evidence), 3)
         self.assertEqual(calls[0][0], "get_database_schema")
         self.assertEqual(calls[1][0], "query_experiment_database")
+        self.assertEqual(calls[2][0], "query_experiment_database")
         self.assertEqual(len(http.requests), 3)
         request = http.requests[0][1]
         self.assertIn("tools", request)
+        self.assertEqual(
+            {tool["function"]["name"] for tool in request["tools"]},
+            {"doc_browser", "get_database_schema", "query_experiment_database"},
+        )
         self.assertNotIn("response_format", request)
         self.assertEqual(
             http.requests[-1][1]["response_format"]["type"], "json_schema"
@@ -195,6 +204,19 @@ class SchedulerTest(unittest.TestCase):
         )
         self.assertNotIn("reasoning_budget", request)
         self.assertIn("active_configuration", request["messages"][1]["content"])
+
+    def test_scheduler_exposes_only_aknet_pages_to_planner(self) -> None:
+        scheduler = Scheduler(
+            FakeExperimentControl(), FakePlanner(), MemoryPlanningRepository()
+        )
+        homepage = asyncio.run(scheduler._execute_planner_tool("doc_browser", {}))
+        rejected = asyncio.run(
+            scheduler._execute_planner_tool("doc_browser", {"url": "/../README"})
+        )
+
+        self.assertEqual(homepage["url"], "/")
+        self.assertIn("Akbar Orientation", homepage["content"])
+        self.assertIn("error", rejected)
 
     def test_planner_rejects_empty_final_content(self) -> None:
         http = FakeHTTPClient([{"role": "assistant", "content": "No query needed."}])
@@ -241,6 +263,8 @@ class SchedulerTest(unittest.TestCase):
                 return {"tables": {"simulation_runs": []}}
             if "missing" in arguments["sql"]:
                 raise ExperimentClientError("Table 'missing' doesn't exist")
+            if "FROM experiments" in arguments["sql"]:
+                return {"rows": [], "returned": 0}
             return {"rows": [], "returned": 0}
 
         decision = asyncio.run(planner.propose(config, execute_tool))
@@ -271,9 +295,11 @@ class SchedulerTest(unittest.TestCase):
         planner = LlamaPlanner(client=FakeHTTPClient(tool_messages))
         config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
 
-        async def execute_tool(name, _arguments):
+        async def execute_tool(name, arguments):
             if name == "get_database_schema":
                 return {"tables": {"simulation_runs": []}}
+            if "FROM experiments" in arguments["sql"]:
+                return {"rows": [], "returned": 0}
             return {"rows": [{"value": 1}], "returned": 1}
 
         decision = asyncio.run(planner.propose(config, execute_tool))
@@ -281,7 +307,42 @@ class SchedulerTest(unittest.TestCase):
         self.assertEqual(decision.proposal.rationale, "Bounded evidence.")
         self.assertEqual(
             len(decision.evidence),
-            DScheduler.MAX_INVESTIGATION_ROUNDS,
+            DScheduler.MAX_INVESTIGATION_ROUNDS + 1,
+        )
+
+    def test_duplicate_proposal_requires_one_reconsideration_and_reason(self) -> None:
+        http = FakeHTTPClient()
+        http.messages.append({
+            "role": "assistant",
+            "content": (
+                '{"learning_rate":0.0008,"epsilon_start":0.9,'
+                '"epsilon_decay":0.995,"rationale":"Repeat deliberately.",'
+                '"duplicate_experiment_reason":"Verify deterministic reproduction '
+                'after the deployment environment changed."}'
+            ),
+        })
+        planner = LlamaPlanner(client=http)
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+
+        async def execute_tool(name, arguments):
+            if name == "get_database_schema":
+                return {"tables": {"simulation_runs": [], "experiments": []}}
+            if "FROM experiments" in arguments["sql"]:
+                return {
+                    "rows": [{"experiment_id": "experiment-1"}],
+                    "returned": 1,
+                }
+            return {"rows": [{"count": 81}], "returned": 1}
+
+        decision = asyncio.run(planner.propose(config, execute_tool))
+
+        self.assertIn("deployment environment", decision.proposal.duplicate_experiment_reason)
+        self.assertEqual(len(http.requests), 4)
+        challenge = http.requests[-1][1]["messages"][-1]["content"]
+        self.assertIn("experiment-1", challenge)
+        self.assertEqual(
+            decision.evidence[-1]["tool"],
+            "duplicate_experiment_check",
         )
 
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:

@@ -12,15 +12,7 @@ class ToolCompositionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             names,
             {
-                "doc_00_intro",
-                "doc_01_overview",
-                "doc_02_configure_experiment",
-                "doc_03_run_experiment",
-                "doc_04_review_results",
-                "doc_05_design_next_experiment",
-                "doc_06_architecture",
-                "doc_07_actual_experiment",
-                "doc_08_data_discipline",
+                "doc_browser",
                 "get_current_highscore",
                 "get_experiment_config",
                 "get_experiment_count",
