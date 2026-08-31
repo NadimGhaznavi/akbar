@@ -9,9 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.2] - 2026-08-30 @ 21:19
+## [0.13.3] - 2026-08-30 @ 22:35
 
-## [0.13.2] - 2026-08-30 @ 21:18
+## [0.13.4] - 2026-08-30 @ 22:33
+
+### Fixed
+
+- Made a scheduler investigation that reaches its round limit proceed to final
+  proposal generation when it already contains successful SQL evidence,
+  instead of intermittently failing the entire planning cycle.
+
+## [0.13.3] - 2026-08-30 @ 22:17
+
+### Fixed
+
+- Treated read-only SQL mistakes as recoverable control-request rejections so
+  Akbar receives actionable database feedback without experiment-service error
+  tracebacks or scheduler-cycle failure.
+
+## [0.13.2] - 2026-08-30 @ 21:19
 
 ### Changed
 

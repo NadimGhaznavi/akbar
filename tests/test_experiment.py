@@ -5,6 +5,8 @@ import socket
 import unittest
 from typing import Any
 
+from pymysql.err import OperationalError
+
 from experiment.ExperimentClient import ExperimentClient, ExperimentClientError
 from experiment.ExperimentConfig import ExperimentConfig
 from experiment.ExperimentDesign import build_simulation_configs
@@ -57,6 +59,8 @@ class MemoryRepository:
                  "data_type": "bigint", "is_nullable": "NO", "column_key": ""}]
 
     def execute_read_query(self, sql, parameters, max_rows) -> dict[str, Any]:
+        if "unknown_column" in sql:
+            raise OperationalError(1054, "Unknown column 'unknown_column' in 'SELECT'")
         rows = list(self.simulations.values())[:max_rows]
         return {"columns": ["simulation_id"], "rows": rows,
                 "returned": len(rows), "truncated": False}
@@ -138,6 +142,15 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
     async def test_rejects_epoch_override(self) -> None:
         with self.assertRaisesRegex(ExperimentClientError, "unsupported"):
             await self.request(MessageType.START_EXPERIMENT, payload={"epochs": 1})
+
+    async def test_sql_errors_are_recoverable_control_rejections(self) -> None:
+        with self.assertRaisesRegex(ExperimentClientError, "Unknown column"):
+            await self.request(
+                MessageType.EXECUTE_READ_QUERY,
+                payload={"sql": "SELECT unknown_column FROM simulation_runs"},
+            )
+        pong = await self.request(MessageType.PING)
+        self.assertEqual(pong["service"], "akbar-experimentd")
 
 
 class ExperimentDesignTest(unittest.TestCase):
