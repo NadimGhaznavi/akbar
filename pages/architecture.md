@@ -73,7 +73,7 @@ ask LLM for one schema-constrained next config
 parse and validate one structured proposal
                 │
                 ▼
-persist config, rationale, and evidence references
+persist config, rationale, success criterion, and evidence references
                 │
                 ▼
 start exactly one experiment through ZMQ
@@ -138,7 +138,8 @@ simulation result only after that simulation leaves its hot loop.
 | State | Authority | Lifetime |
 |---|---|---|
 | Active configuration | MariaDB | Durable |
-| Planning proposal and rationale | MariaDB | Durable |
+| Planning proposal, rationale, and success criterion | MariaDB | Durable |
+| Experiment verdict, conclusion, and evaluation evidence | MariaDB | Durable |
 | Experiment batch lifecycle | MariaDB | Durable |
 | Individual simulation configurations and results | MariaDB | Durable |
 | Active experiment and current metrics | Experiment service | Process lifetime |

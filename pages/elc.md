@@ -18,6 +18,7 @@ ready → queued → running → completed
                     └──→ cancelled
 
 queued/running → interrupted    (service restart)
+completed → evaluated → ready for next plan
 ```
 
 - **Ready** — The service may accept one new experiment.
@@ -73,6 +74,12 @@ parent experiment ID. It contains:
 Failed, cancelled, and interrupted experiments store their terminal status and
 error or stop reason, but do not manufacture a completed result.
 
+Before another plan is launched, a completed planned experiment is evaluated
+against its persisted rationale and success criterion. The evaluation stores a
+`pass`, `fail`, or `inconclusive` verdict, a one-paragraph conclusion, and the
+evidence queries used. Other terminal experiment states receive
+`not_evaluable`; they never imply that a scientific prediction failed.
+
 Akbar discovers the schema and issues arbitrary read-only SQL to retrieve,
 filter, join, group, aggregate, or order these rows. The persistence layer does
 not decide which results are best and does not pre-aggregate the evidence.
@@ -87,6 +94,7 @@ not decide which results are best and does not pre-aggregate the evidence.
 - Every configuration change is validated and persisted before it becomes
   active.
 - Database access never enters the simulation hot loop.
-- A result is factual runner output; evaluation is outside the current ELC.
+- A result is factual runner output; its separate evaluation is interpretive,
+  versioned, and completed before the next planning cycle.
 - Full experiment IDs remain internal to the CLI, which displays four-character
   suffixes and rejects ambiguous historical matches.
