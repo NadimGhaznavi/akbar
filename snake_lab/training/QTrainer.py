@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,7 +25,7 @@ class QTrainer:
         self.gamma = gamma
         self.learning_rate = learning_rate
 
-    def train(self, transitions: list[Transition]) -> float:
+    def train(self, transitions: Sequence[Transition]) -> float:
         states = np.asarray([item.state for item in transitions], dtype=np.float64)
         next_states = np.asarray(
             [item.next_state for item in transitions],

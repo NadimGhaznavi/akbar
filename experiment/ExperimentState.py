@@ -25,6 +25,7 @@ class ExperimentState:
     simulation_number: int = 0
     simulation_count: int = 0
     simulation_id: str | None = None
+    highscore_simulation_id: str | None = None
     created_at: str = field(default_factory=utc_now)
     started_at: str | None = None
     completed_at: str | None = None
