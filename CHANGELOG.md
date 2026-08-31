@@ -9,9 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.2] - 2026-08-30 @ 20:12
+## [0.13.0] - 2026-08-30 @ 21:00
 
-## [0.12.2] - 2026-08-30 @ 20:10
+### Added
+
+- Added a bounded scheduler investigation loop that lets Akbar discover the
+  database schema and choose read-only SQL evidence queries before producing a
+  schema-constrained experiment proposal.
+- Persisted the SQL arguments and results used to support each scheduled
+  planning decision.
+
+### Changed
+
+- Removed the scheduler's preselected latest-results sample so Akbar controls
+  evidence selection and can verify complete experiment, status, seed, and
+  configuration coverage.
+- Reduced each hyperparameter configuration from five fixed seeds to three,
+  producing 81 simulations per experiment instead of 135.
+
+## [0.12.4] - 2026-08-30 @ 20:49
+
+### Added
+
+- Added Akbar self-documentation requiring complete result-population, status,
+  seed, and configuration coverage before drawing experimental conclusions.
+
+## [0.12.3] - 2026-08-30 @ 20:36
+
+### Added
+
+- Added Akbar self-documentation describing the actual Snake reinforcement-
+  learning environment, observations, actions, rewards, linear Q-function,
+  replay training, exploration policy, and simulation boundaries.
+
+## [0.12.2] - 2026-08-30 @ 20:12
 
 ### Added
 

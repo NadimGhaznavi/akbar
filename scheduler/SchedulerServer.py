@@ -9,6 +9,7 @@ import logging
 import os
 import signal
 from dataclasses import asdict, dataclass
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 import httpx
@@ -79,12 +80,21 @@ class ExperimentProposal:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class PlanningDecision:
+    proposal: ExperimentProposal
+    evidence: list[dict[str, Any]]
+
+
+DatabaseToolExecutor = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
 class Planner(Protocol):
     async def propose(
         self,
         config: dict[str, Any],
-        results: list[dict[str, Any]],
-    ) -> ExperimentProposal: ...
+        execute_tool: DatabaseToolExecutor,
+    ) -> PlanningDecision: ...
 
 
 class ExperimentControl(Protocol):
@@ -114,40 +124,89 @@ class LlamaPlanner:
     async def propose(
         self,
         config: dict[str, Any],
-        results: list[dict[str, Any]],
-    ) -> ExperimentProposal:
-        evidence = json.dumps(
-            {"active_configuration": config, "previous_experiments": results},
-            separators=(",", ":"),
-        )
-        response = await self.client.post(
-            self.url,
-            json={
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": DScheduler.SYSTEM_PROMPT},
-                    {"role": "user", "content": evidence},
-                ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "experiment_proposal",
-                        "strict": True,
-                        "schema": DScheduler.PROPOSAL_SCHEMA,
+        execute_tool: DatabaseToolExecutor,
+    ) -> PlanningDecision:
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": DScheduler.SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "active_configuration": config,
+                        "task": "Investigate all relevant data and design the next experiment.",
                     },
+                    separators=(",", ":"),
+                ),
+            },
+        ]
+        evidence: list[dict[str, Any]] = []
+        tool_call_count = 0
+        query_count = 0
+        for _ in range(DScheduler.MAX_INVESTIGATION_ROUNDS):
+            message = await self._request_message(
+                messages,
+                tools=DScheduler.DATABASE_TOOLS,
+            )
+            tool_calls = message.get("tool_calls")
+            assistant_message = {
+                "role": "assistant",
+                "content": message.get("content"),
+            }
+            if "tool_calls" in message:
+                assistant_message["tool_calls"] = message["tool_calls"]
+            messages.append(assistant_message)
+            if not tool_calls:
+                if query_count == 0:
+                    raise PlanningError(
+                        "planner must query the database before proposing"
+                    )
+                break
+            if not isinstance(tool_calls, list):
+                raise PlanningError("planner returned malformed tool calls")
+            for tool_call in tool_calls:
+                tool_call_count += 1
+                if tool_call_count > DScheduler.MAX_INVESTIGATION_TOOL_CALLS:
+                    raise PlanningError("planner exceeded the database tool-call limit")
+                call_id, name, arguments = self._parse_tool_call(tool_call)
+                result = await execute_tool(name, arguments)
+                if name == "query_experiment_database":
+                    query_count += 1
+                evidence.append(
+                    {"tool": name, "arguments": arguments, "result": result}
+                )
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "name": name,
+                        "content": json.dumps(result, separators=(",", ":")),
+                    }
+                )
+        else:
+            raise PlanningError("planner did not complete its database investigation")
+
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Using the evidence you queried, return the next experiment "
+                    "proposal as the required JSON object."
+                ),
+            }
+        )
+        message = await self._request_message(
+            messages,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "experiment_proposal",
+                    "strict": True,
+                    "schema": DScheduler.PROPOSAL_SCHEMA,
                 },
-                "max_tokens": DScheduler.MAX_COMPLETION_TOKENS,
-                "chat_template_kwargs": {"enable_thinking": False},
-                "stream": False,
             },
         )
-        response.raise_for_status()
         choice: Any = None
-        message: Any = None
         try:
-            payload = response.json()
-            choice = payload["choices"][0]
-            message = choice["message"]
             content = message["content"]
             if not isinstance(content, str) or not content:
                 raise PlanningError("proposal content is empty")
@@ -179,7 +238,59 @@ class LlamaPlanner:
             raise PlanningError(
                 "inference service returned invalid proposal JSON"
             ) from error
-        return ExperimentProposal.from_dict(proposal_data, config)
+        return PlanningDecision(
+            ExperimentProposal.from_dict(proposal_data, config),
+            evidence,
+        )
+
+    async def _request_message(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        response_format: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        request: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": DScheduler.MAX_COMPLETION_TOKENS,
+            "chat_template_kwargs": {"enable_thinking": False},
+            "stream": False,
+        }
+        if tools is not None:
+            request["tools"] = tools
+            request["tool_choice"] = "auto"
+        if response_format is not None:
+            request["response_format"] = response_format
+        response = await self.client.post(self.url, json=request)
+        response.raise_for_status()
+        try:
+            message = response.json()["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as error:
+            raise PlanningError("inference service returned a malformed message") from error
+        if not isinstance(message, dict):
+            raise PlanningError("inference service returned a malformed message")
+        return message
+
+    @staticmethod
+    def _parse_tool_call(
+        tool_call: dict[str, Any],
+    ) -> tuple[str, str, dict[str, Any]]:
+        try:
+            call_id = tool_call["id"]
+            function = tool_call["function"]
+            name = function["name"]
+            raw_arguments = function.get("arguments", "{}")
+            arguments = json.loads(raw_arguments)
+        except (KeyError, TypeError, json.JSONDecodeError) as error:
+            raise PlanningError("planner returned a malformed database tool call") from error
+        if not isinstance(call_id, str) or not isinstance(name, str):
+            raise PlanningError("planner returned a malformed database tool call")
+        if not isinstance(arguments, dict):
+            raise PlanningError("database tool arguments must be an object")
+        if name not in {"get_database_schema", "query_experiment_database"}:
+            raise PlanningError(f"unsupported planner tool: {name}")
+        return call_id, name, arguments
 
 
 class Scheduler:
@@ -211,32 +322,14 @@ class Scheduler:
             return None
 
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
-        history = await self._request(
-            MessageType.EXECUTE_READ_QUERY,
-            {
-                "sql": (
-                    "SELECT simulation_id, experiment_id, seed, epochs, "
-                    "learning_rate, epsilon_start, epsilon_decay, highscore, "
-                    "average_score, average_loss, total_moves, replay_size, "
-                    "elapsed_seconds, "
-                    "completed_at FROM simulation_runs "
-                    "WHERE status = 'completed' ORDER BY completed_at DESC LIMIT %s"
-                ),
-                "parameters": [DScheduler.RESULT_HISTORY_LIMIT],
-                "max_rows": DScheduler.RESULT_HISTORY_LIMIT,
-            },
-        )
-        results = history.get("rows")
-        if not isinstance(results, list):
-            raise PlanningError("experiment service returned invalid result history")
-
-        LOGGER.info("requesting proposal using %d previous results", len(results))
-        proposal = await self.planner.propose(config, results)
+        LOGGER.info("asking planner to investigate experiment data")
+        decision = await self.planner.propose(config, self._execute_database_tool)
+        proposal = decision.proposal
         proposal_data = asdict(proposal)
         plan_id = await asyncio.to_thread(
             self.plans.create,
             proposal_data,
-            results,
+            decision.evidence,
         )
         try:
             await self._request(
@@ -262,6 +355,24 @@ class Scheduler:
             raise
         LOGGER.info("started experiment %s from plan %s", experiment_id, plan_id)
         return experiment_id
+
+    async def _execute_database_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        if name == "get_database_schema":
+            if arguments:
+                raise PlanningError("get_database_schema does not accept arguments")
+            return await self._request(MessageType.GET_DATABASE_SCHEMA)
+        if name == "query_experiment_database":
+            unknown = set(arguments) - {"sql", "parameters", "max_rows"}
+            if unknown:
+                raise PlanningError(
+                    f"unsupported query arguments: {', '.join(sorted(unknown))}"
+                )
+            return await self._request(MessageType.EXECUTE_READ_QUERY, arguments)
+        raise PlanningError(f"unsupported planner tool: {name}")
 
     async def _request(
         self,

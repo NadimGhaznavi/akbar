@@ -14,7 +14,7 @@ class DExperiment:
     DEFAULT_LEARNING_RATE: Final[float] = 0.001
     DEFAULT_LEARNING_RATE_STEP: Final[float] = 0.00
     DEFAULT_SEED: Final[int] = 1970
-    SEEDS: Final[tuple[int, ...]] = (1970, 1971, 1972, 1973, 1974)
+    SEEDS: Final[tuple[int, ...]] = (1970, 1971, 1972)
     VARIATION_FRACTION: Final[float] = 0.05
     MIN_EPOCHS: Final[int] = 50
     MAX_EPOCHS: Final[int] = 100_000

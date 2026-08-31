@@ -48,12 +48,12 @@ installation, run:
 sudo python3 scripts/install.py --enable --start
 ```
 
-The scheduler waits 15 seconds after startup and checks experiment state every
-15 seconds. It skips active experiments. When idle, it loads recent results,
-requests one structured configuration proposal from llama.cpp, validates and
-persists the proposal, and starts exactly one experiment. Scheduler timing can
-be overridden through the corresponding `AKBAR_SCHEDULER_*` unit environment
-variables.
+The scheduler waits three seconds after startup and checks experiment state
+every three seconds. It skips active experiments. When idle, it lets llama.cpp
+investigate results with bounded read-only SQL, requests one structured
+configuration proposal, validates and persists the proposal and its evidence,
+and starts exactly one experiment. Scheduler timing can be overridden through
+the corresponding `AKBAR_SCHEDULER_*` unit environment variables.
 
 ## Installed files
 

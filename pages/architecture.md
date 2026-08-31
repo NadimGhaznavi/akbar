@@ -20,9 +20,9 @@ in-memory orchestration state.
   OpenAI-compatible inference. The scheduler uses its inference API, while MCP
   configuration gives interactive web-chat turns access to Akbar's tools.
 - **`akbar-scheduler.service`** owns the experiment workflow. It checks whether
-  work is active, loads previous results, requests one structured proposal from
-  the language model, validates and persists the decision, and starts exactly
-  one experiment.
+  work is active, gives the language model bounded read-only SQL access for its
+  evidence investigation, requests one structured proposal, validates and
+  persists the decision and evidence, and starts exactly one experiment.
 - **`akbar-experimentd.service`** owns experiment execution and live telemetry.
   It accepts at most one active experiment and runs it entirely in memory.
 
@@ -56,10 +56,16 @@ check authoritative experiment state
         └── idle/terminal
                 │
                 ▼
-load active config and bounded raw simulation results
+load active configuration
                 │
                 ▼
-ask LLM to review old experiments and propose next config
+ask LLM to investigate MariaDB with read-only SQL
+                │
+                ▼
+execute bounded schema/query tool calls and return evidence
+                │
+                ▼
+ask LLM for one schema-constrained next config
                 │
                 ▼
 parse and validate one structured proposal
@@ -82,10 +88,14 @@ experiment service.
 The scheduler gives the language model:
 
 - The active configuration and its enforced limits.
-- A bounded set of previous completed experiments.
-- Each run's configuration, seed, score metrics, and completion time.
-- An instruction to compare the old experiments and design the next deliberate
-  experiment.
+- Read-only schema discovery and arbitrary read-only SQL access.
+- An instruction to establish complete experiment, status, seed, and
+  configuration coverage before designing the next experiment.
+
+Akbar chooses its evidence queries. The scheduler does not select or truncate a
+history sample. The investigation is bounded by tool-call, query-runtime, and
+query-row safety limits, and its SQL arguments and results are persisted with
+the planning decision.
 
 The language model returns one schema-constrained proposal:
 
@@ -106,8 +116,8 @@ persisted before its experiment is launched.
 
 The experiment service snapshots the three submitted hyperparameters and creates
 a lifecycle record. It varies each value by five percent to form a 3 x 3 x 3
-grid, then runs all 27 configurations with seeds 1970 through 1974. The resulting
-135 simulations each run for exactly 1,500 epochs and persist separate raw result
+grid, then runs all 27 configurations with seeds 1970 through 1972. The resulting
+81 simulations each run for exactly 1,500 epochs and persist separate raw result
 rows. Epsilon decay is perturbed in terms of `1 - epsilon_decay`, preserving
 useful resolution near one.
 
@@ -132,7 +142,7 @@ simulation result only after that simulation leaves its hot loop.
 - MariaDB is accessed at experiment lifecycle boundaries and for explicit
   historical queries, never within or between simulation epochs.
 - At most one experiment may be queued or running.
-- One valid planning proposal launches one 135-simulation experiment.
+- One valid planning proposal launches one 81-simulation experiment.
 - Akbar may issue arbitrary single-statement read-only SQL for analysis; the
   experiment layer does not rank or aggregate results for him.
 - Interactive chat and scheduled planning share the inference server but have
