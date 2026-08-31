@@ -1,5 +1,9 @@
 # Planning and Execution Workflow
 
+- On a fresh installation, launch one baseline experiment from the service's
+  default configuration without asking the language model to choose values.
+- After baseline evidence exists, begin each planning conversation at the Aknet
+  homepage and consult the relevant orientation pages.
 - Confirm that no experiment is queued or running.
 - Discover the database schema before writing analytical SQL.
 - Establish complete experiment, status, seed, and configuration coverage.

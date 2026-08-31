@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reduced each experiment from three fixed seeds to the single fixed seed 1970,
+  producing 27 simulations instead of 81, and advanced the methodology version
+  so earlier experiments remain distinguishable.
 - Replaced the numbered, hard-coded documentation tools with pages that can be
   extended without changing Python tool definitions.
 - Reject oversized serialized SQL results with a detailed explanation of the

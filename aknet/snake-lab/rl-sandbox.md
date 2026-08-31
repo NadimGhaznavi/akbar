@@ -1,6 +1,4 @@
-# Snake Agent
-
-Each epoch is one complete Snake game.
+# Reinforcement Learning Sandbox
 
 ## Observations
 

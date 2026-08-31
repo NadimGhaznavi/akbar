@@ -462,6 +462,22 @@ class Scheduler:
             LOGGER.debug("experiment is %s; schedule tick skipped", status["status"])
             return None
 
+        count = await self._request(MessageType.GET_EXPERIMENT_COUNT)
+        if count.get("experiment_count") == 0:
+            config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
+            baseline = {
+                "learning_rate": config["learning_rate"],
+                "epsilon_start": config["epsilon_start"],
+                "epsilon_decay": config["epsilon_decay"],
+            }
+            accepted = await self._request(MessageType.START_EXPERIMENT, baseline)
+            experiment_id = accepted["experiment_id"]
+            LOGGER.info(
+                "started initial baseline experiment %s from service defaults",
+                experiment_id,
+            )
+            return experiment_id
+
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
         LOGGER.info("asking planner to investigate experiment data")
         decision = await self.planner.propose(config, self._execute_planner_tool)
