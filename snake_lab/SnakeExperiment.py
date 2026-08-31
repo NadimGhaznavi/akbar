@@ -40,7 +40,7 @@ class SnakeExperiment:
         )
         model = LinearQModel(game.STATE_SIZE, game.ACTION_COUNT, self.config.seed)
         trainer = QTrainer(model, self.config.gamma, self.config.learning_rate)
-        memory: ReplayMemory[Transition] = ReplayMemory(
+        memory = ReplayMemory(
             self.config.replay_capacity,
             self.config.batch_size,
             replay_rng,
@@ -67,7 +67,7 @@ class SnakeExperiment:
                 if policy_rng.random() < epsilon:
                     action = policy_rng.randrange(game.ACTION_COUNT)
                 else:
-                    values = model.predict(np.asarray([state], dtype=np.float64))[0]
+                    values = model.predict_one(state)
                     action = int(np.argmax(values))
 
                 step = game.step(action)
