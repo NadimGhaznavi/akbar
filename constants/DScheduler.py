@@ -27,6 +27,14 @@ class DScheduler:
         "When the evidence is sufficient, explain that the investigation is "
         "complete. Do not start experiments or attempt database writes."
     )
+    EVALUATION_SYSTEM_PROMPT: Final[str] = (
+        "You evaluate one completed AI Snake Lab experiment. Begin at the "
+        "orientation intranet homepage / and consult relevant guidance. Discover "
+        "the MariaDB schema, then use read-only SQL to verify the complete relevant "
+        "population, lifecycle status, seed coverage, and configuration coverage. "
+        "Judge only the persisted rationale and predeclared success criterion. Do "
+        "not propose or start another experiment and do not attempt database writes."
+    )
     PLANNER_TOOLS: Final[list[dict[str, Any]]] = [
         {
             "type": "function",
@@ -78,10 +86,24 @@ class DScheduler:
             "epsilon_start": {"type": "number"},
             "epsilon_decay": {"type": "number"},
             "rationale": {"type": "string", "minLength": 1},
+            "success_criterion": {"type": "string", "minLength": 1},
         },
         "required": [
-            "learning_rate", "epsilon_start", "epsilon_decay", "rationale"
+            "learning_rate", "epsilon_start", "epsilon_decay", "rationale",
+            "success_criterion",
         ],
+        "additionalProperties": False,
+    }
+    EVALUATION_SCHEMA: Final[dict[str, Any]] = {
+        "type": "object",
+        "properties": {
+            "verdict": {
+                "type": "string",
+                "enum": ["pass", "fail", "inconclusive"],
+            },
+            "conclusion": {"type": "string", "minLength": 1},
+        },
+        "required": ["verdict", "conclusion"],
         "additionalProperties": False,
     }
     DUPLICATE_PROPOSAL_SCHEMA: Final[dict[str, Any]] = {

@@ -2,9 +2,18 @@
 
 Free-form text is part of the scientific record. Write it so that a future reader can understand the decision without reconstructing the planning conversation.
 
+The automatic first experiment is a special baseline. Its synthetic rationale
+states that the default configuration establishes the initial reference
+population, and its success criterion and conclusion concern complete usable
+coverage rather than improvement over evidence that did not yet exist.
+
 ## Experiment Rationale
 
 A useful rationale identifies the evidence reviewed, states the interpretation, names the proposed change, and explains what the experiment is intended to reveal.
+
+Rationales, success criteria, and conclusions should each be no more than one
+paragraph. Summarize distributions, aggregates, comparisons, and coverage; do
+not turn prose into a list of individual simulation values or data points.
 
 - Include the experiment IDs or clearly defined population examined.
 - Include row counts and relevant status, seed, and configuration coverage.
@@ -22,6 +31,24 @@ Across completed experiments 4744dcb9 and 5ea305dc, I analyzed all 54 completed 
 The lower learning rate looked better, so I will try something nearby.
 
 The weak example does not identify its evidence population, coverage, observed measurements, exact proposal, uncertainty, or intended comparison.
+
+## Success Criterion
+
+State before execution what observable population-level outcome would support
+the rationale. The criterion must be specific enough to distinguish `pass`
+from `fail`; use `inconclusive` when completed evidence cannot make that
+distinction. Execution failure, cancellation, interruption, or incomplete
+coverage is `not_evaluable`, not a scientific failure.
+
+## Experiment Conclusion
+
+After a completed experiment, compare the complete 27-simulation population
+with the predeclared rationale and success criterion. Record `pass` when the
+criterion is met, `fail` when complete evidence contradicts it, and
+`inconclusive` when the evidence cannot distinguish the proposed outcomes. The
+conclusion must be one concise paragraph describing coverage, the aggregate
+comparison, the verdict, limitations, and the implication for subsequent work;
+do not enumerate individual simulation results.
 
 ## Duplicate Experiment Reason
 

@@ -35,6 +35,7 @@ class ExperimentProposal:
     epsilon_start: float
     epsilon_decay: float
     rationale: str
+    success_criterion: str
     duplicate_experiment_reason: str | None = None
 
     @classmethod
@@ -43,19 +44,21 @@ class ExperimentProposal:
         data: dict[str, Any],
         config: dict[str, Any],
     ) -> ExperimentProposal:
-        required = {"learning_rate", "epsilon_start", "epsilon_decay", "rationale"}
+        required = {"learning_rate", "epsilon_start", "epsilon_decay", "rationale",
+                    "success_criterion"}
         if not required <= set(data) or set(data) - {
             *required,
             "duplicate_experiment_reason",
         }:
             raise PlanningError(
                 "proposal must contain learning_rate, epsilon_start, "
-                "epsilon_decay, and rationale"
+                "epsilon_decay, rationale, and success_criterion"
             )
         learning_rate = data["learning_rate"]
         epsilon_start = data["epsilon_start"]
         epsilon_decay = data["epsilon_decay"]
         rationale = data["rationale"]
+        success_criterion = data["success_criterion"]
         duplicate_reason = data.get("duplicate_experiment_reason")
         for name, value in (
             ("learning_rate", learning_rate),
@@ -66,6 +69,8 @@ class ExperimentProposal:
                 raise PlanningError(f"proposal {name} must be a number")
         if not isinstance(rationale, str) or not rationale.strip():
             raise PlanningError("proposal rationale must be non-empty text")
+        if not isinstance(success_criterion, str) or not success_criterion.strip():
+            raise PlanningError("proposal success_criterion must be non-empty text")
         if duplicate_reason is not None and (
             not isinstance(duplicate_reason, str) or not duplicate_reason.strip()
         ):
@@ -88,7 +93,8 @@ class ExperimentProposal:
             float(learning_rate),
             float(epsilon_start),
             float(epsilon_decay),
-            rationale.strip(),
+            " ".join(rationale.split()),
+            " ".join(success_criterion.split()),
             duplicate_reason.strip() if isinstance(duplicate_reason, str) else None,
         )
 
@@ -96,6 +102,13 @@ class ExperimentProposal:
 @dataclass(frozen=True, slots=True)
 class PlanningDecision:
     proposal: ExperimentProposal
+    evidence: list[dict[str, Any]]
+
+
+@dataclass(frozen=True, slots=True)
+class ExperimentEvaluation:
+    verdict: str
+    conclusion: str
     evidence: list[dict[str, Any]]
 
 
@@ -108,6 +121,9 @@ class Planner(Protocol):
         config: dict[str, Any],
         execute_tool: DatabaseToolExecutor,
     ) -> PlanningDecision: ...
+    async def evaluate(
+        self, plan: dict[str, Any], execute_tool: DatabaseToolExecutor,
+    ) -> ExperimentEvaluation: ...
 
 
 class ExperimentControl(Protocol):
@@ -295,6 +311,82 @@ class LlamaPlanner:
                 )
         return PlanningDecision(proposal, evidence)
 
+    async def evaluate(
+        self,
+        plan: dict[str, Any],
+        execute_tool: DatabaseToolExecutor,
+    ) -> ExperimentEvaluation:
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": DScheduler.EVALUATION_SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps({
+                "task": (
+                    "Evaluate the completed experiment against its predeclared "
+                    "rationale and success criterion. Verify complete status, seed, "
+                    "and configuration coverage with read-only SQL. The conclusion "
+                    "must be one concise paragraph that summarizes aggregate or "
+                    "population-level evidence; do not list individual data points."
+                ),
+                **plan,
+            }, separators=(",", ":"))},
+        ]
+        evidence: list[dict[str, Any]] = []
+        schema_discovered = False
+        successful_queries = 0
+        for _ in range(DScheduler.MAX_INVESTIGATION_ROUNDS):
+            message = await self._request_message(
+                messages, tools=DScheduler.PLANNER_TOOLS
+            )
+            tool_calls = message.get("tool_calls")
+            assistant = {"role": "assistant", "content": message.get("content")}
+            if tool_calls is not None:
+                assistant["tool_calls"] = tool_calls
+            messages.append(assistant)
+            if not tool_calls:
+                break
+            if not isinstance(tool_calls, list):
+                raise PlanningError("evaluator returned malformed tool calls")
+            for tool_call in tool_calls:
+                call_id, name, arguments = self._parse_tool_call(tool_call)
+                if name == "query_experiment_database" and not schema_discovered:
+                    result = {
+                        "error": "Discover the database schema before issuing SQL."
+                    }
+                else:
+                    result = await execute_tool(name, arguments)
+                if name == "get_database_schema" and "error" not in result:
+                    schema_discovered = True
+                if name == "query_experiment_database" and "error" not in result:
+                    successful_queries += 1
+                evidence.append(
+                    {"tool": name, "arguments": arguments, "result": result}
+                )
+                messages.append({"role": "tool", "tool_call_id": call_id,
+                                 "name": name,
+                                 "content": json.dumps(result, separators=(",", ":"))})
+        if successful_queries == 0:
+            raise PlanningError("evaluator must successfully query the database")
+        messages.append({"role": "user", "content": (
+            "Return the verdict and one-paragraph conclusion as the required "
+            "JSON object."
+        )})
+        message = await self._request_message(messages, response_format={
+            "type": "json_schema", "json_schema": {
+                "name": "experiment_evaluation", "strict": True,
+                "schema": DScheduler.EVALUATION_SCHEMA,
+            },
+        })
+        try:
+            data = json.loads(message["content"])
+            verdict = data["verdict"]
+            conclusion = " ".join(data["conclusion"].split())
+        except (KeyError, TypeError, json.JSONDecodeError) as error:
+            raise PlanningError(
+                "inference service returned invalid evaluation JSON"
+            ) from error
+        if verdict not in {"pass", "fail", "inconclusive"} or not conclusion:
+            raise PlanningError("inference service returned an invalid evaluation")
+        return ExperimentEvaluation(verdict, conclusion, evidence)
+
     @staticmethod
     def _proposal_from_message(
         message: dict[str, Any],
@@ -470,13 +562,56 @@ class Scheduler:
                 "epsilon_start": config["epsilon_start"],
                 "epsilon_decay": config["epsilon_decay"],
             }
-            accepted = await self._request(MessageType.START_EXPERIMENT, baseline)
-            experiment_id = accepted["experiment_id"]
+            proposal = {
+                **baseline,
+                "rationale": (
+                    "Run the service's default configuration to establish the "
+                    "initial complete reference population for later experiments."
+                ),
+                "success_criterion": (
+                    "All 27 configured simulations complete with seed 1970 and "
+                    "produce a usable baseline population."
+                ),
+            }
+            plan_id = await asyncio.to_thread(self.plans.create, proposal, [])
+            try:
+                accepted = await self._request(MessageType.START_EXPERIMENT, baseline)
+                experiment_id = accepted["experiment_id"]
+                await asyncio.to_thread(self.plans.mark_started, plan_id, experiment_id)
+            except Exception as error:
+                await asyncio.to_thread(self.plans.mark_failed, plan_id, str(error))
+                raise
             LOGGER.info(
                 "started initial baseline experiment %s from service defaults",
                 experiment_id,
             )
             return experiment_id
+
+        pending = await asyncio.to_thread(self.plans.pending_evaluation)
+        if pending is not None:
+            if pending.get("experiment_status", "completed") != "completed":
+                experiment_status = pending["experiment_status"]
+                conclusion = (
+                    f"The experiment is not evaluable because execution ended "
+                    f"with status {experiment_status}; no scientific pass or fail "
+                    "is inferred from incomplete evidence."
+                )
+                await asyncio.to_thread(
+                    self.plans.save_evaluation,
+                    pending["plan_id"], pending["experiment_id"],
+                    "not_evaluable", conclusion, [],
+                )
+                return None
+            LOGGER.info("evaluating completed experiment %s", pending["experiment_id"])
+            evaluation = await self.planner.evaluate(
+                pending, self._execute_planner_tool
+            )
+            await asyncio.to_thread(
+                self.plans.save_evaluation,
+                pending["plan_id"], pending["experiment_id"],
+                evaluation.verdict, evaluation.conclusion, evaluation.evidence,
+            )
+            return None
 
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
         LOGGER.info("asking planner to investigate experiment data")
@@ -583,6 +718,7 @@ def _environment_float(name: str, default: float) -> float:
 async def serve() -> None:
     plans = MariaDBPlanningRepository()
     await asyncio.to_thread(plans.initialize)
+    await asyncio.to_thread(plans.ensure_initial_baseline_plan)
     planner = LlamaPlanner()
     scheduler = Scheduler(
         ExperimentClient(),
