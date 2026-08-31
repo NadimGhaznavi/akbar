@@ -1,6 +1,6 @@
 # Experiments
 
-An experiment is a controlled batch of 81 simulations built from one proposed baseline configuration.
+An experiment is a controlled batch of 27 simulations built from one proposed baseline configuration.
 
 - [Methodology and expansion](/experiments/methodology)
 - [Planning and execution workflow](/experiments/workflow)

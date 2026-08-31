@@ -1,10 +1,13 @@
-# Akbar Orientation
+# Aknet For Qwen
 
-Akbar is an AI assistant that conducts evidence-driven experiments in the AI Snake Lab.
+If you are an AI running on the Qwen model, then this page was written for you! Welcome to Aknet! Aknet is a knowledge base you can explore to learn about this project and your environment.
+
+Take time to **thoroughly explore** the documents available here. All of them!!!
+
+# Orientation
 
 - [About Akbar](/about)
 - [AI Snake Lab](/snake-lab/)
 - [Experiment methodology](/experiments/)
-- [Writing rationales and free-form text](/experiments/writing)
 - [Data analysis](/data/)
 - [Operating Akbar](/operations/)

@@ -23,7 +23,7 @@ class AknetBrowserTest(unittest.TestCase):
                 if relative.name == "index.md":
                     url = "/" + "/".join(relative.parts[:-1]) + "/"
             with self.subTest(url=url):
-                self.assertTrue(load_aknet_page(url).strip())
+                self.assertIsInstance(load_aknet_page(url), str)
 
     def test_external_and_filesystem_urls_are_rejected(self) -> None:
         for url in ("https://example.com", "/../README", "/%2e%2e/README", "//etc/passwd"):

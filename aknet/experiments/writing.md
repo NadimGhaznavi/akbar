@@ -15,7 +15,7 @@ A useful rationale identifies the evidence reviewed, states the interpretation, 
 
 ### Strong Rationale Example
 
-Across completed experiments 4744dcb9 and 5ea305dc, I analyzed all 162 completed simulation rows, covering all 27 configurations and three seeds per experiment. Configurations near learning rate 0.0008 produced more consistent scores across seeds than nearby 0.001 configurations, while epsilon settings were unchanged, so the learning-rate effect remains the clearest distinction. I propose a 0.00085 learning-rate baseline with epsilon start 1.0 and epsilon decay 0.995. This experiment tests whether the apparent improvement persists between the two previously tested learning-rate centers while preserving direct comparability on exploration settings.
+Across completed experiments 4744dcb9 and 5ea305dc, I analyzed all 54 completed simulation rows, covering all 27 configurations with seed 1970 in each experiment. Configurations near learning rate 0.0008 scored higher than nearby 0.001 configurations, while epsilon settings were unchanged, so the learning-rate effect is the clearest distinction available within this single-seed methodology. I propose a 0.00085 learning-rate baseline with epsilon start 1.0 and epsilon decay 0.995. This experiment tests whether the apparent improvement persists between the two previously tested learning-rate centers while preserving direct comparability on exploration settings. Because only one seed is used, the result will not establish robustness across random initializations.
 
 ### Weak Rationale Example
 
@@ -35,7 +35,7 @@ An exact deterministic duplicate is normally redundant. A duplicate experiment r
 
 ### Strong Duplicate Reason Example
 
-Repeat experiment 4744dcb9 after upgrading the numerical runtime to verify that the environment change did not alter deterministic outcomes. I will compare every simulation by configuration and seed against the original 81 rows. Exact agreement supports continuity across the runtime upgrade; any disagreement indicates an environmental reproducibility problem that must be investigated before combining old and new results.
+Repeat experiment 4744dcb9 after upgrading the numerical runtime to verify that the environment change did not alter deterministic outcomes. I will compare every simulation by configuration against the original 27 rows for seed 1970. Exact agreement supports continuity across the runtime upgrade; any disagreement indicates an environmental reproducibility problem that must be investigated before combining old and new results.
 
 ### Weak Duplicate Reason Example
 

@@ -24,7 +24,7 @@ queued/running → interrupted    (service restart)
 - **Queued** — The experiment has an ID, baseline configuration, and database
   record but has not entered the runner.
 - **Running** — One of the batch's simulations owns the active in-memory state.
-- **Completed** — All 81 simulations reached a terminal state.
+- **Completed** — All 27 simulations reached a terminal state.
 - **Failed** — Execution ended with a recorded error.
 - **Cancelled** — A stop request ended execution cleanly.
 - **Interrupted** — The service restarted while the experiment was queued or
@@ -39,7 +39,7 @@ Starting an experiment must:
 1. Confirm that no experiment is active.
 2. Validate the submitted learning rate, initial epsilon, and epsilon decay.
 3. Expand them into 27 nearby hyperparameter configurations.
-4. Assign the three fixed seeds to every configuration.
+4. Assign the fixed seed 1970 to every configuration.
 5. Create the experiment record and start sequential simulation execution.
 
 Start requests are never queued. Repeated requests received while the service

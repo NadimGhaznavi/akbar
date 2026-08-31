@@ -2,7 +2,7 @@ from typing import Final
 
 
 class DExperiment:
-    METHODOLOGY_VERSION: Final[int] = 1
+    METHODOLOGY_VERSION: Final[int] = 2
     PROTOCOL_VERSION: Final[int] = 1
     CONTROL_HOST: Final[str] = "127.0.0.1"
     CONTROL_PORT: Final[int] = 51971
@@ -15,7 +15,7 @@ class DExperiment:
     DEFAULT_LEARNING_RATE: Final[float] = 0.001
     DEFAULT_LEARNING_RATE_STEP: Final[float] = 0.00
     DEFAULT_SEED: Final[int] = 1970
-    SEEDS: Final[tuple[int, ...]] = (1970, 1971, 1972)
+    SEEDS: Final[tuple[int, ...]] = (DEFAULT_SEED,)
     VARIATION_FRACTION: Final[float] = 0.05
     MIN_EPOCHS: Final[int] = 50
     MAX_EPOCHS: Final[int] = 100_000
