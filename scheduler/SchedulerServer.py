@@ -16,9 +16,11 @@ import httpx
 from pymysql.err import MySQLError
 
 from constants.DScheduler import DScheduler
+from constants.DExperiment import DExperiment
 from experiment.ExperimentClient import ExperimentClient, ExperimentClientError
 from experiment.ExperimentProtocol import MessageType
 from scheduler.PlanningRepository import MariaDBPlanningRepository, PlanningRepository
+from tools.AknetBrowser import load_aknet_page
 
 LOGGER = logging.getLogger("akbar.scheduler")
 
@@ -33,6 +35,7 @@ class ExperimentProposal:
     epsilon_start: float
     epsilon_decay: float
     rationale: str
+    duplicate_experiment_reason: str | None = None
 
     @classmethod
     def from_dict(
@@ -40,8 +43,10 @@ class ExperimentProposal:
         data: dict[str, Any],
         config: dict[str, Any],
     ) -> ExperimentProposal:
-        if set(data) != {
-            "learning_rate", "epsilon_start", "epsilon_decay", "rationale"
+        required = {"learning_rate", "epsilon_start", "epsilon_decay", "rationale"}
+        if not required <= set(data) or set(data) - {
+            *required,
+            "duplicate_experiment_reason",
         }:
             raise PlanningError(
                 "proposal must contain learning_rate, epsilon_start, "
@@ -51,6 +56,7 @@ class ExperimentProposal:
         epsilon_start = data["epsilon_start"]
         epsilon_decay = data["epsilon_decay"]
         rationale = data["rationale"]
+        duplicate_reason = data.get("duplicate_experiment_reason")
         for name, value in (
             ("learning_rate", learning_rate),
             ("epsilon_start", epsilon_start),
@@ -60,6 +66,12 @@ class ExperimentProposal:
                 raise PlanningError(f"proposal {name} must be a number")
         if not isinstance(rationale, str) or not rationale.strip():
             raise PlanningError("proposal rationale must be non-empty text")
+        if duplicate_reason is not None and (
+            not isinstance(duplicate_reason, str) or not duplicate_reason.strip()
+        ):
+            raise PlanningError(
+                "duplicate_experiment_reason must be non-empty text or null"
+            )
         limits = config["limits"]
         rate_limits = limits["learning_rate"]
         if not (
@@ -77,6 +89,7 @@ class ExperimentProposal:
             float(epsilon_start),
             float(epsilon_decay),
             rationale.strip(),
+            duplicate_reason.strip() if isinstance(duplicate_reason, str) else None,
         )
 
 
@@ -146,7 +159,7 @@ class LlamaPlanner:
         for _ in range(DScheduler.MAX_INVESTIGATION_ROUNDS):
             message = await self._request_message(
                 messages,
-                tools=DScheduler.DATABASE_TOOLS,
+                tools=DScheduler.PLANNER_TOOLS,
             )
             tool_calls = message.get("tool_calls")
             assistant_message = {
@@ -228,7 +241,65 @@ class LlamaPlanner:
                 },
             },
         )
-        choice: Any = None
+        proposal = self._proposal_from_message(message, config)
+        messages.append({"role": "assistant", "content": message.get("content")})
+        duplicates, duplicate_check = await self._find_completed_duplicates(
+            proposal,
+            execute_tool,
+        )
+        evidence.append(duplicate_check)
+        if duplicates:
+            messages.append(
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "duplicate_configuration_warning": (
+                                "This exact deterministic configuration already "
+                                "completed under the same methodology. Reconsider "
+                                "it once. Either submit a genuinely different "
+                                "configuration, or retain it with a specific "
+                                "duplicate_experiment_reason explaining what new "
+                                "knowledge the repetition is intended to produce."
+                            ),
+                            "matching_experiments": duplicates,
+                            "submitted_proposal": asdict(proposal),
+                        },
+                        separators=(",", ":"),
+                    ),
+                }
+            )
+            reconsidered = await self._request_message(
+                messages,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "duplicate_experiment_reconsideration",
+                        "strict": True,
+                        "schema": DScheduler.DUPLICATE_PROPOSAL_SCHEMA,
+                    },
+                },
+            )
+            proposal = self._proposal_from_message(reconsidered, config)
+            duplicates, duplicate_check = await self._find_completed_duplicates(
+                proposal,
+                execute_tool,
+            )
+            evidence.append(duplicate_check)
+            if duplicates and (
+                proposal.duplicate_experiment_reason is None
+                or len(proposal.duplicate_experiment_reason) < 20
+            ):
+                raise PlanningError(
+                    "a confirmed duplicate experiment requires a specific reason"
+                )
+        return PlanningDecision(proposal, evidence)
+
+    @staticmethod
+    def _proposal_from_message(
+        message: dict[str, Any],
+        config: dict[str, Any],
+    ) -> ExperimentProposal:
         try:
             content = message["content"]
             if not isinstance(content, str) or not content:
@@ -247,13 +318,9 @@ class LlamaPlanner:
             reasoning = (
                 message.get("reasoning_content") if isinstance(message, dict) else None
             )
-            finish_reason = (
-                choice.get("finish_reason") if isinstance(choice, dict) else None
-            )
             LOGGER.error(
-                "invalid proposal response: finish_reason=%r content_length=%d "
+                "invalid proposal response: content_length=%d "
                 "reasoning_length=%d content_preview=%r",
-                finish_reason,
                 len(content) if isinstance(content, str) else 0,
                 len(reasoning) if isinstance(reasoning, str) else 0,
                 content[:200] if isinstance(content, str) else None,
@@ -261,10 +328,57 @@ class LlamaPlanner:
             raise PlanningError(
                 "inference service returned invalid proposal JSON"
             ) from error
-        return PlanningDecision(
-            ExperimentProposal.from_dict(proposal_data, config),
-            evidence,
-        )
+        return ExperimentProposal.from_dict(proposal_data, config)
+
+    @staticmethod
+    async def _find_completed_duplicates(
+        proposal: ExperimentProposal,
+        execute_tool: DatabaseToolExecutor,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        arguments = {
+            "sql": (
+                "SELECT experiment_id, completed_at FROM experiments "
+                "WHERE status = 'completed' "
+                "AND CAST(JSON_UNQUOTE(JSON_EXTRACT(config_json, "
+                "'$.learning_rate')) AS DECIMAL(30,15)) = "
+                "CAST(%s AS DECIMAL(30,15)) "
+                "AND CAST(JSON_UNQUOTE(JSON_EXTRACT(config_json, "
+                "'$.epsilon_start')) AS DECIMAL(30,15)) = "
+                "CAST(%s AS DECIMAL(30,15)) "
+                "AND CAST(JSON_UNQUOTE(JSON_EXTRACT(config_json, "
+                "'$.epsilon_decay')) AS DECIMAL(30,15)) = "
+                "CAST(%s AS DECIMAL(30,15)) "
+                "AND JSON_UNQUOTE(JSON_EXTRACT(config_json, "
+                "'$.methodology.version')) = %s "
+                "ORDER BY completed_at DESC"
+            ),
+            "parameters": [
+                proposal.learning_rate,
+                proposal.epsilon_start,
+                proposal.epsilon_decay,
+                str(DExperiment.METHODOLOGY_VERSION),
+            ],
+            "max_rows": 100,
+        }
+        try:
+            result = await execute_tool("query_experiment_database", arguments)
+        except ExperimentClientError as error:
+            raise PlanningError(
+                f"unable to check for duplicate experiments: {error}"
+            ) from error
+        if "error" in result:
+            raise PlanningError(
+                f"unable to check for duplicate experiments: {result['error']}"
+            )
+        rows = result.get("rows")
+        if not isinstance(rows, list):
+            raise PlanningError("duplicate experiment check returned malformed rows")
+        record = {
+            "tool": "duplicate_experiment_check",
+            "arguments": arguments,
+            "result": result,
+        }
+        return rows, record
 
     async def _request_message(
         self,
@@ -311,7 +425,11 @@ class LlamaPlanner:
             raise PlanningError("planner returned a malformed database tool call")
         if not isinstance(arguments, dict):
             raise PlanningError("database tool arguments must be an object")
-        if name not in {"get_database_schema", "query_experiment_database"}:
+        if name not in {
+            "doc_browser",
+            "get_database_schema",
+            "query_experiment_database",
+        }:
             raise PlanningError(f"unsupported planner tool: {name}")
         return call_id, name, arguments
 
@@ -346,7 +464,7 @@ class Scheduler:
 
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
         LOGGER.info("asking planner to investigate experiment data")
-        decision = await self.planner.propose(config, self._execute_database_tool)
+        decision = await self.planner.propose(config, self._execute_planner_tool)
         proposal = decision.proposal
         proposal_data = asdict(proposal)
         plan_id = await asyncio.to_thread(
@@ -379,11 +497,22 @@ class Scheduler:
         LOGGER.info("started experiment %s from plan %s", experiment_id, plan_id)
         return experiment_id
 
-    async def _execute_database_tool(
+    async def _execute_planner_tool(
         self,
         name: str,
         arguments: dict[str, Any],
     ) -> dict[str, Any]:
+        if name == "doc_browser":
+            unknown = set(arguments) - {"url"}
+            if unknown:
+                raise PlanningError(
+                    f"unsupported doc_browser arguments: {', '.join(sorted(unknown))}"
+                )
+            url = arguments.get("url", "/")
+            try:
+                return {"url": url, "content": load_aknet_page(url)}
+            except (TypeError, ValueError) as error:
+                return {"error": str(error)}
         if name == "get_database_schema":
             if arguments:
                 raise PlanningError("get_database_schema does not accept arguments")

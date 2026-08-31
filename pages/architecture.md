@@ -34,7 +34,9 @@ queue in the scheduled path.
 - **MariaDB** stores experiment configuration, planning decisions, batch
   lifecycle records, and one raw result per simulation run.
 - **MCP tool package (`tools`)** supports interactive web chat and project
-  inspection. It is not responsible for scheduled workflow execution.
+  inspection, including the read-only `aknet` orientation intranet.
+- **Aknet document root (`aknet`)** stores linked Markdown orientation pages.
+  Its URL resolver cannot address files outside that root or external sites.
 - **ZMQ control plane** carries versioned experiment requests and replies.
 - **ZMQ telemetry** publishes non-blocking per-epoch updates from the experiment
   service.
@@ -56,7 +58,7 @@ check authoritative experiment state
         └── idle/terminal
                 │
                 ▼
-load active configuration
+load active configuration and browse relevant orientation pages
                 │
                 ▼
 ask LLM to investigate MariaDB with read-only SQL
@@ -88,7 +90,10 @@ experiment service.
 The scheduler gives the language model:
 
 - The active configuration and its enforced limits.
-- Read-only schema discovery and arbitrary read-only SQL access.
+- The `aknet` orientation homepage and its linked task guidance.
+- Read-only schema discovery and arbitrary read-only SQL access, with a
+  serialized-result length limit that rejects oversized results with narrowing
+  guidance.
 - An instruction to establish complete experiment, status, seed, and
   configuration coverage before designing the next experiment.
 
@@ -110,7 +115,11 @@ The language model returns one schema-constrained proposal:
 
 Python rejects malformed or out-of-range proposals. A rejected proposal does
 not start an experiment and may be retried on a later tick. A valid proposal is
-persisted before its experiment is launched.
+checked against completed experiments under the same methodology. An exact
+duplicate receives one reconsideration challenge containing the matching
+experiment IDs. Akbar may revise the configuration or explicitly confirm it
+with a substantive `duplicate_experiment_reason`. The proposal, duplicate
+reason, and SQL evidence are persisted before the experiment is launched.
 
 ## Experiment execution
 

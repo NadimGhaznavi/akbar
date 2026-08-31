@@ -339,12 +339,14 @@ class MariaDBExperimentRepository:
             finally:
                 connection.rollback()
         truncated = len(rows) > max_rows
-        return {
+        result = {
             "columns": columns,
             "rows": rows[:max_rows],
             "returned": min(len(rows), max_rows),
             "truncated": truncated,
         }
+        validate_query_result_size(result)
+        return result
 
 
 def _json_value(value: Any) -> Any:
@@ -355,6 +357,37 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def validate_query_result_size(result: dict[str, Any]) -> None:
+    encoded = json.dumps(result, separators=(",", ":"), ensure_ascii=False).encode(
+        "utf-8"
+    )
+    maximum = DExperiment.MAX_QUERY_RESULT_BYTES
+    if len(encoded) <= maximum:
+        return
+    largest: list[tuple[int, str]] = []
+    for row in result.get("rows", []):
+        if not isinstance(row, dict):
+            continue
+        for column, value in row.items():
+            size = len(
+                json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode(
+                    "utf-8"
+                )
+            )
+            largest.append((size, str(column)))
+    offenders = ", ".join(
+        f"{column} ({size:,} bytes)"
+        for size, column in sorted(largest, reverse=True)[:3]
+    ) or "unknown"
+    raise ValueError(
+        f"query result is {len(encoded):,} bytes; the maximum is {maximum:,} bytes. "
+        f"Largest returned values: {offenders}. Select only the columns needed, "
+        "extract individual JSON fields with JSON_EXTRACT, aggregate in SQL, or "
+        "use a more specific WHERE clause. Reducing max_rows alone may not help "
+        "when a selected text or JSON column is large."
+    )
 
 
 def validate_read_query(sql: str) -> str:

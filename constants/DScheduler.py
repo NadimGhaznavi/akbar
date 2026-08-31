@@ -15,7 +15,9 @@ class DScheduler:
     CHAT_TIMEOUT_SECONDS: Final[int] = 120
     MAX_COMPLETION_TOKENS: Final[int] = 512
     SYSTEM_PROMPT: Final[str] = (
-        "You design the next AI Snake Lab experiment. First discover the MariaDB "
+        "You design the next AI Snake Lab experiment. Begin at the orientation "
+        "intranet homepage / and consult the pages relevant to your task. First "
+        "discover the MariaDB "
         "schema, then investigate it using the provided read-only SQL tool before "
         "proposing anything. If a query returns an error, correct the SQL and retry. "
         "You choose the queries: establish the complete relevant population, "
@@ -25,7 +27,22 @@ class DScheduler:
         "When the evidence is sufficient, explain that the investigation is "
         "complete. Do not start experiments or attempt database writes."
     )
-    DATABASE_TOOLS: Final[list[dict[str, Any]]] = [
+    PLANNER_TOOLS: Final[list[dict[str, Any]]] = [
+        {
+            "type": "function",
+            "function": {
+                "name": "doc_browser",
+                "description": (
+                    "Browse the read-only Akbar orientation intranet. Begin at / "
+                    "and follow its internal links."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"url": {"type": "string", "default": "/"}},
+                    "additionalProperties": False,
+                },
+            },
+        },
         {
             "type": "function",
             "function": {
@@ -64,6 +81,20 @@ class DScheduler:
         },
         "required": [
             "learning_rate", "epsilon_start", "epsilon_decay", "rationale"
+        ],
+        "additionalProperties": False,
+    }
+    DUPLICATE_PROPOSAL_SCHEMA: Final[dict[str, Any]] = {
+        "type": "object",
+        "properties": {
+            **PROPOSAL_SCHEMA["properties"],
+            "duplicate_experiment_reason": {
+                "type": ["string", "null"],
+            },
+        },
+        "required": [
+            *PROPOSAL_SCHEMA["required"],
+            "duplicate_experiment_reason",
         ],
         "additionalProperties": False,
     }
