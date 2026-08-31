@@ -19,6 +19,8 @@ class ToolCompositionTest(unittest.IsolatedAsyncioTestCase):
                 "doc_04_review_results",
                 "doc_05_design_next_experiment",
                 "doc_06_architecture",
+                "doc_07_actual_experiment",
+                "doc_08_data_discipline",
                 "get_current_highscore",
                 "get_experiment_config",
                 "get_experiment_count",
