@@ -197,7 +197,7 @@ class ExperimentServer:
                 "seeds": list(DExperiment.SEEDS),
                 "variation_fraction": DExperiment.VARIATION_FRACTION,
                 "hyperparameter_configurations": 27,
-                "simulation_count": 135,
+                "simulation_count": 27 * len(DExperiment.SEEDS),
             },
         }
         await asyncio.to_thread(self.repository.create, experiment_id, config_data)
@@ -244,7 +244,7 @@ class ExperimentServer:
             "epsilon_decay": self.default_config.epsilon_decay,
             "seeds": list(DExperiment.SEEDS),
             "variation_fraction": DExperiment.VARIATION_FRACTION,
-            "simulations_per_experiment": 135,
+            "simulations_per_experiment": 27 * len(DExperiment.SEEDS),
             "limits": {
                 "learning_rate": {
                     "minimum": DExperiment.MIN_LEARNING_RATE,

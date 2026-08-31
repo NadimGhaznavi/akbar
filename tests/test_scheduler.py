@@ -9,37 +9,55 @@ from experiment.ExperimentProtocol import MessageType
 from scheduler.SchedulerServer import (
     ExperimentProposal,
     LlamaPlanner,
+    PlanningDecision,
     PlanningError,
     Scheduler,
 )
 
 
 class FakeHTTPResponse:
-    def __init__(self, content: Any) -> None:
-        self.content = content
+    def __init__(self, message: dict[str, Any]) -> None:
+        self.message = message
 
     def raise_for_status(self) -> None:
         pass
 
     def json(self) -> dict[str, Any]:
-        return {"choices": [{"message": {"content": self.content}}]}
+        return {"choices": [{"message": self.message}]}
 
 
 class FakeHTTPClient:
     def __init__(
         self,
-        content: Any = (
-            '{"learning_rate":0.0008,"epsilon_start":0.9,'
-            '"epsilon_decay":0.995,'
-            '"rationale":"Compare the previous run."}'
-        ),
+        messages: list[dict[str, Any]] | None = None,
     ) -> None:
-        self.content = content
+        self.messages = messages or [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": "call-1", "type": "function",
+                    "function": {
+                        "name": "query_experiment_database",
+                        "arguments": '{"sql":"SELECT COUNT(*) AS count FROM simulation_runs"}',
+                    },
+                }],
+            },
+            {"role": "assistant", "content": "Investigation complete."},
+            {
+                "role": "assistant",
+                "content": (
+                    '{"learning_rate":0.0008,"epsilon_start":0.9,'
+                    '"epsilon_decay":0.995,'
+                    '"rationale":"Compare the complete experiment."}'
+                ),
+            },
+        ]
         self.requests: list[tuple[str, dict[str, Any]]] = []
 
     async def post(self, url: str, json: dict[str, Any]) -> FakeHTTPResponse:
         self.requests.append((url, json))
-        return FakeHTTPResponse(self.content)
+        return FakeHTTPResponse(self.messages.pop(0))
 
     async def aclose(self) -> None:
         pass
@@ -91,19 +109,25 @@ class FakeExperimentControl:
 
 class FakePlanner:
     def __init__(self) -> None:
-        self.inputs: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+        self.inputs: list[dict[str, Any]] = []
 
     async def propose(
         self,
         config: dict[str, Any],
-        results: list[dict[str, Any]],
-    ) -> ExperimentProposal:
-        self.inputs.append((config, results))
-        return ExperimentProposal(
-            learning_rate=0.0008,
-            epsilon_start=0.9,
-            epsilon_decay=0.995,
-            rationale="Test a lower rate after reviewing experiment-1.",
+        execute_tool,
+    ) -> PlanningDecision:
+        self.inputs.append(config)
+        arguments = {"sql": "SELECT * FROM simulation_runs"}
+        result = await execute_tool("query_experiment_database", arguments)
+        return PlanningDecision(
+            ExperimentProposal(
+                learning_rate=0.0008,
+                epsilon_start=0.9,
+                epsilon_decay=0.995,
+                rationale="Test a lower rate after reviewing experiment-1.",
+            ),
+            [{"tool": "query_experiment_database", "arguments": arguments,
+              "result": result}],
         )
 
 
@@ -132,32 +156,45 @@ class MemoryPlanningRepository:
 
 
 class SchedulerTest(unittest.TestCase):
-    def test_planner_makes_one_structured_request_with_previous_results(self) -> None:
+    def test_planner_investigates_with_sql_before_structured_proposal(self) -> None:
         http = FakeHTTPClient()
         planner = LlamaPlanner(client=http)
         config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
-        results = [{"experiment_id": "experiment-1", "highscore": 2}]
+        calls = []
 
-        proposal = asyncio.run(planner.propose(config, results))
+        async def execute_tool(name, arguments):
+            calls.append((name, arguments))
+            return {"rows": [{"count": 81}], "returned": 1}
 
-        self.assertEqual(proposal.learning_rate, 0.0008)
-        self.assertEqual(len(http.requests), 1)
+        decision = asyncio.run(planner.propose(config, execute_tool))
+
+        self.assertEqual(decision.proposal.learning_rate, 0.0008)
+        self.assertEqual(len(decision.evidence), 1)
+        self.assertEqual(calls[0][0], "query_experiment_database")
+        self.assertEqual(len(http.requests), 3)
         request = http.requests[0][1]
-        self.assertEqual(request["response_format"]["type"], "json_schema")
+        self.assertIn("tools", request)
+        self.assertNotIn("response_format", request)
+        self.assertEqual(
+            http.requests[-1][1]["response_format"]["type"], "json_schema"
+        )
         self.assertEqual(
             request["chat_template_kwargs"],
             {"enable_thinking": False},
         )
         self.assertNotIn("reasoning_budget", request)
-        self.assertIn("previous_experiments", request["messages"][1]["content"])
+        self.assertIn("active_configuration", request["messages"][1]["content"])
 
     def test_planner_rejects_empty_final_content(self) -> None:
-        http = FakeHTTPClient("")
+        http = FakeHTTPClient([{"role": "assistant", "content": "No query needed."}])
         planner = LlamaPlanner(client=http)
         config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
 
-        with self.assertRaisesRegex(PlanningError, "invalid proposal JSON"):
-            asyncio.run(planner.propose(config, []))
+        async def execute_tool(_name, _arguments):
+            return {}
+
+        with self.assertRaisesRegex(PlanningError, "must query"):
+            asyncio.run(planner.propose(config, execute_tool))
 
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
         experiment = FakeExperimentControl()
@@ -169,7 +206,7 @@ class SchedulerTest(unittest.TestCase):
 
         self.assertEqual(experiment_id, "experiment-2")
         self.assertEqual(len(planner.inputs), 1)
-        self.assertEqual(planner.inputs[0][1][0]["experiment_id"], "experiment-1")
+        self.assertEqual(planner.inputs[0]["learning_rate"], 0.001)
         self.assertEqual(
             experiment.calls,
             [
@@ -177,7 +214,7 @@ class SchedulerTest(unittest.TestCase):
                 (MessageType.GET_EXPERIMENT_CONFIG, None),
                 (
                     MessageType.EXECUTE_READ_QUERY,
-                    experiment.calls[2][1],
+                    {"sql": "SELECT * FROM simulation_runs"},
                 ),
                 (
                     MessageType.SET_EXPERIMENT_CONFIG,
