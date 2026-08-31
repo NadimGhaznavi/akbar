@@ -332,7 +332,7 @@ class Scheduler:
     async def run_once(self) -> str | None:
         status = await self._request(MessageType.GET_EXPERIMENT_STATUS)
         if status.get("status") in {"queued", "running"}:
-            LOGGER.info("experiment is %s; schedule tick skipped", status["status"])
+            LOGGER.debug("experiment is %s; schedule tick skipped", status["status"])
             return None
 
         config = await self._request(MessageType.GET_EXPERIMENT_CONFIG)
