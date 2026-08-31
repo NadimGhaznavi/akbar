@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import time
 from dataclasses import replace
 from collections.abc import Callable
 from typing import Any
@@ -299,6 +300,8 @@ class ExperimentServer:
             state.status = ExperimentStatus.RUNNING
             state.started_at = utc_now()
             simulation_configs = self.config_builder(config)
+            simulation_count = len(simulation_configs)
+            batch_started = time.monotonic()
             failed = 0
             for index, simulation_config in enumerate(simulation_configs, start=1):
                 if self._runner_stop.is_set():
@@ -311,6 +314,18 @@ class ExperimentServer:
                     experiment_id,
                     simulation_data,
                 )
+                LOG.info(
+                    "Experiment %s simulation %d/%d started: id=%s seed=%d "
+                    "learning_rate=%.8g epsilon_start=%.8g epsilon_decay=%.8g",
+                    experiment_id,
+                    index,
+                    simulation_count,
+                    simulation_id,
+                    simulation_config.seed,
+                    simulation_config.learning_rate,
+                    simulation_config.epsilon_start,
+                    simulation_config.epsilon_decay,
+                )
                 try:
                     runner_result = await self.runner_factory(simulation_config).run(
                         self._runner_stop,
@@ -321,7 +336,7 @@ class ExperimentServer:
                                     **telemetry,
                                     "simulation_id": sid,
                                     "simulation_number": number,
-                                    "simulation_count": len(simulation_configs),
+                                    "simulation_count": simulation_count,
                                 },
                             )
                         ),
@@ -350,6 +365,24 @@ class ExperimentServer:
                         result,
                         None,
                     )
+                    batch_elapsed = time.monotonic() - batch_started
+                    estimated_remaining = (
+                        batch_elapsed / index * (simulation_count - index)
+                    )
+                    LOG.info(
+                        "Experiment %s simulation %d/%d completed in %.2fs: "
+                        "id=%s highscore=%s average_score=%s; batch elapsed "
+                        "%.2fs, estimated remaining %.2fs",
+                        experiment_id,
+                        index,
+                        simulation_count,
+                        runner_result["elapsed_seconds"],
+                        simulation_id,
+                        runner_result["highscore"],
+                        runner_result["average_score"],
+                        batch_elapsed,
+                        estimated_remaining,
+                    )
                 except ExperimentCancelled:
                     await asyncio.to_thread(
                         self.repository.finish_simulation,
@@ -358,10 +391,23 @@ class ExperimentServer:
                         None,
                         "Experiment stopped by request",
                     )
+                    LOG.info(
+                        "Experiment %s simulation %d/%d cancelled: id=%s",
+                        experiment_id,
+                        index,
+                        simulation_count,
+                        simulation_id,
+                    )
                     raise
                 except Exception as error:
                     failed += 1
-                    LOG.exception("Simulation %s failed", simulation_id)
+                    LOG.exception(
+                        "Experiment %s simulation %d/%d failed: id=%s",
+                        experiment_id,
+                        index,
+                        simulation_count,
+                        simulation_id,
+                    )
                     await asyncio.to_thread(
                         self.repository.finish_simulation,
                         simulation_id,
@@ -379,6 +425,15 @@ class ExperimentServer:
                 state.status.value,
                 None,
                 f"{failed} simulations failed" if failed else None,
+            )
+            LOG.info(
+                "Experiment %s finished with status=%s: %d simulations, "
+                "%d failed, elapsed %.2fs",
+                experiment_id,
+                state.status.value,
+                simulation_count,
+                failed,
+                time.monotonic() - batch_started,
             )
         except ExperimentCancelled:
             state.status = ExperimentStatus.CANCELLED

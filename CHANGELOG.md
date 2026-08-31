@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.12.1] - 2026-08-30 @ 19:59
+## [0.12.2] - 2026-08-30 @ 20:12
 
-## [0.12.1] - 2026-08-30 @ 19:58
+## [0.12.2] - 2026-08-30 @ 20:10
+
+### Added
+
+- Added experiment-service journal entries for every simulation start,
+  completion, cancellation, and failure, including batch position, runtime,
+  metrics, elapsed batch time, and estimated remaining time.
+
+## [0.12.1] - 2026-08-30 @ 19:59
 
 ### Fixed
 
