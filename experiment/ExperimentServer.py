@@ -464,10 +464,15 @@ class ExperimentServer:
     ) -> None:
         state.epoch = telemetry["epoch"]
         state.score = telemetry["score"]
-        state.highscore = telemetry["highscore"]
         state.simulation_number = telemetry.get("simulation_number", 1)
         state.simulation_count = telemetry.get("simulation_count", 1)
         state.simulation_id = telemetry.get("simulation_id")
+        if (
+            state.highscore_simulation_id is None
+            or telemetry["highscore"] > state.highscore
+        ):
+            state.highscore = telemetry["highscore"]
+            state.highscore_simulation_id = state.simulation_id
         state.progress = (
             state.simulation_number - 1 + telemetry["progress"]
         ) / state.simulation_count
@@ -543,6 +548,7 @@ class ExperimentServer:
                 "status": state.status.value,
                 "epoch": state.epoch,
                 "highscore": state.highscore,
+                "simulation_id": state.highscore_simulation_id,
             },
             state.experiment_id,
         )

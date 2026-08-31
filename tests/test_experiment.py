@@ -130,9 +130,15 @@ class ExperimentServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(row["result"] for row in self.repository.simulations.values()))
         self.assertIsNone(self.repository.records[experiment_id]["result"])
         methodology = self.repository.records[experiment_id]["config"]["methodology"]
-        self.assertEqual(methodology["version"], 2)
+        self.assertEqual(methodology["version"], 3)
         self.assertEqual(methodology["simulation_count"], 27)
         self.assertEqual(methodology["seeds"], [1970])
+        highscore = await self.request(
+            MessageType.GET_CURRENT_HIGHSCORE,
+            experiment_id=experiment_id,
+        )
+        self.assertEqual(highscore["highscore"], 2)
+        self.assertIn(highscore["simulation_id"], self.repository.simulations)
 
     async def test_schema_and_open_ended_query_api(self) -> None:
         schema = await self.request(MessageType.GET_DATABASE_SCHEMA)

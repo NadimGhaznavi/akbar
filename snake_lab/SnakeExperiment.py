@@ -42,6 +42,7 @@ class SnakeExperiment:
         trainer = QTrainer(model, self.config.gamma, self.config.learning_rate)
         memory: ReplayMemory[Transition] = ReplayMemory(
             self.config.replay_capacity,
+            self.config.batch_size,
             replay_rng,
         )
 
@@ -54,7 +55,7 @@ class SnakeExperiment:
         for epoch in range(1, self.config.epochs + 1):
             state = game.reset()
             done = False
-            episode_losses: list[float] = []
+            episode: list[Transition] = []
             epsilon = max(
                 self.config.epsilon_min,
                 self.config.epsilon_start
@@ -77,18 +78,17 @@ class SnakeExperiment:
                     step.state,
                     step.done,
                 )
-                memory.append(transition)
-                episode_losses.append(trainer.train([transition]))
+                episode.append(transition)
                 state = step.state
                 done = step.done
                 total_moves += 1
                 if total_moves % 256 == 0:
                     await asyncio.sleep(0)
 
-            if len(memory) >= self.config.batch_size:
-                episode_losses.append(
-                    trainer.train(memory.sample(self.config.batch_size))
-                )
+            memory.append_episode(episode)
+            episode_losses = (
+                [trainer.train(memory.sample_batch())] if len(memory) else []
+            )
             scores.append(game.score)
             losses.extend(episode_losses)
             highscore = max(highscore, game.score)
@@ -98,7 +98,11 @@ class SnakeExperiment:
                     "score": game.score,
                     "highscore": highscore,
                     "average_score": round(statistics.fmean(scores), 6),
-                    "average_loss": round(statistics.fmean(episode_losses), 6),
+                    "average_loss": (
+                        round(statistics.fmean(episode_losses), 6)
+                        if episode_losses
+                        else 0.0
+                    ),
                     "epsilon": round(epsilon, 6),
                     "moves": game.moves,
                     "progress": epoch / self.config.epochs,
@@ -113,7 +117,7 @@ class SnakeExperiment:
             "epochs": self.config.epochs,
             "highscore": highscore,
             "average_score": round(statistics.fmean(scores), 6),
-            "average_loss": round(statistics.fmean(losses), 6),
+            "average_loss": round(statistics.fmean(losses), 6) if losses else 0.0,
             "total_moves": total_moves,
             "replay_size": len(memory),
             "elapsed_seconds": round(time.monotonic() - started, 6),
