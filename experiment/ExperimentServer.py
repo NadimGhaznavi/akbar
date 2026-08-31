@@ -193,7 +193,7 @@ class ExperimentServer:
         config_data = {
             **config.to_dict(),
             "methodology": {
-                "version": 1,
+                "version": DExperiment.METHODOLOGY_VERSION,
                 "epochs": DExperiment.FIXED_EPOCHS,
                 "seeds": list(DExperiment.SEEDS),
                 "variation_fraction": DExperiment.VARIATION_FRACTION,

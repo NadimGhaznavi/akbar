@@ -9,9 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.3] - 2026-08-30 @ 22:35
+## [0.14.0] - 2026-08-31 @ 11:58
 
-## [0.13.4] - 2026-08-30 @ 22:33
+### Added
+
+- Added the isolated `aknet` Markdown orientation intranet and one read-only
+  `doc_browser` tool for both interactive and scheduled Akbar. Internal URLs
+  map only to validated pages beneath the document root.
+- Added linked orientation pages for the Snake Lab, experiment methodology,
+  workflow, data analysis, SQL use, data discipline, and system operation.
+- Added concrete strong and weak examples for writing evidence-based experiment
+  rationales, duplicate-experiment reasons, and other free-form scientific text.
+
+### Changed
+
+- Replaced the numbered, hard-coded documentation tools with pages that can be
+  extended without changing Python tool definitions.
+- Reject oversized serialized SQL results with a detailed explanation of the
+  largest returned fields and concrete query-narrowing guidance.
+
+## [0.14.0] - 2026-08-31 @ 05:50
+
+### Added
+
+- Added a one-round duplicate-experiment interlock. Exact completed
+  configurations under the same methodology are returned to Akbar for
+  reconsideration; Akbar may revise the proposal or explicitly confirm it with
+  a substantive, persisted `duplicate_experiment_reason`.
+
+## [0.13.4] - 2026-08-30 @ 22:35
 
 ### Fixed
 

@@ -23,6 +23,10 @@ from constants.DAkbar import DAkbar  # noqa: E402
 from constants.DDatabase import DDatabase  # noqa: E402
 
 SYSTEMD_DIRECTORY = Path("/etc/systemd/system")
+AKNET_FILES = tuple(
+    (path.relative_to(PROJECT_ROOT), path.relative_to(PROJECT_ROOT))
+    for path in sorted((PROJECT_ROOT / "aknet").rglob("*.md"))
+)
 APPLICATION_FILES = (
     (Path("constants/__init__.py"), Path("constants/__init__.py")),
     (Path("constants/DAkbar.py"), Path("constants/DAkbar.py")),
@@ -110,11 +114,13 @@ APPLICATION_FILES = (
     (Path("tools/__main__.py"), Path("tools/__main__.py")),
     (Path("tools/server.py"), Path("tools/server.py")),
     (Path("tools/project.py"), Path("tools/project.py")),
+    (Path("tools/AknetBrowser.py"), Path("tools/AknetBrowser.py")),
     (Path("tools/documentation.py"), Path("tools/documentation.py")),
     (Path("tools/experiments.py"), Path("tools/experiments.py")),
     (Path("scripts/akbar-cli.py"), Path("scripts/akbar-cli.py")),
     (Path("scripts/install.py"), Path("scripts/install.py")),
     (Path("scripts/upgrade.py"), Path("scripts/upgrade.py")),
+    *AKNET_FILES,
 )
 DEPENDENCY_FILES = (Path("requirements.txt"), Path("pyproject.toml"))
 OBSOLETE_SERVICE_NAMES = ("akbar-agentd.service",)

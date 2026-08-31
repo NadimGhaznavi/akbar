@@ -34,6 +34,15 @@ The CLI talks directly to the experiment service, displays only the final four
 characters of experiment IDs, and provides DB-backed experiment counts and
 completed results without language-model interpretation.
 
+## Akbar orientation intranet
+
+Akbar's read-only orientation site lives in `aknet/`. Its homepage is
+`aknet/index.md`, exposed to interactive and scheduled Akbar through the
+`doc_browser` tool at URL `/`. Internal URLs map to Markdown files and directory
+indexes inside that document root; they cannot address the rest of the project
+or external sites. Pages intentionally support only plain text, headings,
+bullets, and internal links.
+
 Use an alternate prefix without installing the systemd unit for testing:
 
 ```sh
