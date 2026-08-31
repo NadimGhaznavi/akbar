@@ -15,8 +15,9 @@ class DScheduler:
     CHAT_TIMEOUT_SECONDS: Final[int] = 120
     MAX_COMPLETION_TOKENS: Final[int] = 512
     SYSTEM_PROMPT: Final[str] = (
-        "You design the next AI Snake Lab experiment. Investigate MariaDB using "
-        "the provided read-only schema and SQL tools before proposing anything. "
+        "You design the next AI Snake Lab experiment. First discover the MariaDB "
+        "schema, then investigate it using the provided read-only SQL tool before "
+        "proposing anything. If a query returns an error, correct the SQL and retry. "
         "You choose the queries: establish the complete relevant population, "
         "verify experiment/status/seed/configuration coverage, and analyze all "
         "relevant observations rather than an arbitrary subset. Use LIMIT only "
