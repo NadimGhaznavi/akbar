@@ -7,7 +7,21 @@ import unittest
 from experiment.ExperimentConfig import ExperimentConfig
 from snake_lab.game.SnakeGame import SnakeGame
 from snake_lab.SnakeExperiment import SnakeExperiment
+from snake_lab.training.QTrainer import Transition
 from snake_lab.training.ReplayMemory import ReplayMemory
+
+
+def transitions(count: int, start: int = 0) -> list[Transition]:
+    return [
+        Transition(
+            state=(float(index),),
+            action=index % 3,
+            reward=float(index),
+            next_state=(float(index + 1),),
+            done=index == start + count - 1,
+        )
+        for index in range(start, start + count)
+    ]
 
 
 class SnakeGameTest(unittest.TestCase):
@@ -36,26 +50,27 @@ class SnakeGameTest(unittest.TestCase):
 
 class ReplayMemoryTest(unittest.TestCase):
     def test_episode_batches_are_aligned_from_the_terminal_move(self) -> None:
-        memory = ReplayMemory[int](10, 4, random.Random(1))
+        memory = ReplayMemory(10, 4, random.Random(1))
 
-        retained = memory.append_episode(range(10))
+        retained = memory.append_episode(transitions(10))
 
         self.assertEqual(retained, 8)
         self.assertEqual(len(memory), 8)
         self.assertEqual(
-            tuple(memory.batches()),
-            ((2, 3, 4, 5), (6, 7, 8, 9)),
+            tuple(batch.rewards.tolist() for batch in memory.batches()),
+            ([2.0, 3.0, 4.0, 5.0], [6.0, 7.0, 8.0, 9.0]),
         )
+        self.assertTrue(memory.sample_batch().states.flags.c_contiguous)
 
     def test_capacity_evicts_complete_batches(self) -> None:
-        memory = ReplayMemory[int](10, 4, random.Random(1))
-        memory.append_episode(range(8))
-        memory.append_episode(range(8, 12))
+        memory = ReplayMemory(10, 4, random.Random(1))
+        memory.append_episode(transitions(8))
+        memory.append_episode(transitions(4, start=8))
 
         self.assertEqual(len(memory), 8)
         self.assertEqual(
-            tuple(memory.batches()),
-            ((4, 5, 6, 7), (8, 9, 10, 11)),
+            tuple(batch.rewards.tolist() for batch in memory.batches()),
+            ([4.0, 5.0, 6.0, 7.0], [8.0, 9.0, 10.0, 11.0]),
         )
 
 

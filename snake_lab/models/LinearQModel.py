@@ -21,6 +21,9 @@ class LinearQModel:
     def predict(self, states: FloatArray) -> FloatArray:
         return states @ self.weights + self.bias
 
+    def predict_one(self, state: tuple[float, ...]) -> FloatArray:
+        return np.asarray(state, dtype=np.float64) @ self.weights + self.bias
+
     def train(
         self,
         states: FloatArray,
@@ -34,11 +37,13 @@ class LinearQModel:
         loss = float(np.mean(errors**2))
 
         gradient = (2.0 / len(states)) * errors
-        weight_gradient = np.zeros_like(self.weights)
-        bias_gradient = np.zeros_like(self.bias)
-        for row, action, value in zip(states, actions, gradient, strict=True):
-            weight_gradient[:, action] += row * value
-            bias_gradient[action] += value
+        action_gradients = np.zeros(
+            (len(states), self.bias.size),
+            dtype=np.float64,
+        )
+        action_gradients[np.arange(len(states)), actions] = gradient
+        weight_gradient = states.T @ action_gradients
+        bias_gradient = np.sum(action_gradients, axis=0)
         self.weights -= learning_rate * np.clip(weight_gradient, -1.0, 1.0)
         self.bias -= learning_rate * np.clip(bias_gradient, -1.0, 1.0)
         return loss
