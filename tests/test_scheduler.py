@@ -8,6 +8,7 @@ from constants.DScheduler import DScheduler
 from experiment.ExperimentClient import ExperimentClientError
 from experiment.ExperimentProtocol import MessageType
 from scheduler.SchedulerServer import (
+    ExperimentEvaluation,
     ExperimentProposal,
     LlamaPlanner,
     PlanningDecision,
@@ -59,7 +60,8 @@ class FakeHTTPClient:
                 "content": (
                     '{"learning_rate":0.0008,"epsilon_start":0.9,'
                     '"epsilon_decay":0.995,'
-                    '"rationale":"Compare the complete experiment."}'
+                    '"rationale":"Compare the complete experiment.",'
+                    '"success_criterion":"The complete population improves."}'
                 ),
             },
         ]
@@ -127,6 +129,7 @@ class FakeExperimentControl:
 class FakePlanner:
     def __init__(self) -> None:
         self.inputs: list[dict[str, Any]] = []
+        self.evaluation_inputs: list[dict[str, Any]] = []
 
     async def propose(
         self,
@@ -142,7 +145,18 @@ class FakePlanner:
                 epsilon_start=0.9,
                 epsilon_decay=0.995,
                 rationale="Test a lower rate after reviewing experiment-1.",
+                success_criterion="The complete population improves.",
             ),
+            [{"tool": "query_experiment_database", "arguments": arguments,
+              "result": result}],
+        )
+
+    async def evaluate(self, plan, execute_tool) -> ExperimentEvaluation:
+        self.evaluation_inputs.append(plan)
+        arguments = {"sql": "SELECT COUNT(*) AS count FROM simulation_runs"}
+        result = await execute_tool("query_experiment_database", arguments)
+        return ExperimentEvaluation(
+            "pass", "The complete baseline population is available for comparison.",
             [{"tool": "query_experiment_database", "arguments": arguments,
               "result": result}],
         )
@@ -153,6 +167,8 @@ class MemoryPlanningRepository:
         self.proposals: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
         self.started: list[tuple[str, str]] = []
         self.failed: list[tuple[str, str]] = []
+        self.pending = None
+        self.evaluations = []
 
     def initialize(self) -> None:
         pass
@@ -170,6 +186,17 @@ class MemoryPlanningRepository:
 
     def mark_failed(self, plan_id: str, error: str) -> None:
         self.failed.append((plan_id, error))
+
+    def pending_evaluation(self):
+        return self.pending
+
+    def save_evaluation(self, plan_id, experiment_id, verdict, conclusion, evidence):
+        self.evaluations.append(
+            (plan_id, experiment_id, verdict, conclusion, evidence)
+        )
+
+    def ensure_initial_baseline_plan(self) -> None:
+        pass
 
 
 class SchedulerTest(unittest.TestCase):
@@ -239,7 +266,8 @@ class SchedulerTest(unittest.TestCase):
     def test_planner_receives_sql_errors_and_can_correct_its_query(self) -> None:
         final_content = (
             '{"learning_rate":0.0008,"epsilon_start":0.9,'
-            '"epsilon_decay":0.995,"rationale":"Used corrected SQL."}'
+            '"epsilon_decay":0.995,"rationale":"Used corrected SQL.",'
+            '"success_criterion":"The aggregate result improves."}'
         )
         http = FakeHTTPClient([
             {"role": "assistant", "content": None, "tool_calls": [{
@@ -296,7 +324,8 @@ class SchedulerTest(unittest.TestCase):
             "role": "assistant",
             "content": (
                 '{"learning_rate":0.0008,"epsilon_start":0.9,'
-                '"epsilon_decay":0.995,"rationale":"Bounded evidence."}'
+                '"epsilon_decay":0.995,"rationale":"Bounded evidence.",'
+                '"success_criterion":"The aggregate result improves."}'
             ),
         })
         planner = LlamaPlanner(client=FakeHTTPClient(tool_messages))
@@ -324,6 +353,7 @@ class SchedulerTest(unittest.TestCase):
             "content": (
                 '{"learning_rate":0.0008,"epsilon_start":0.9,'
                 '"epsilon_decay":0.995,"rationale":"Repeat deliberately.",'
+                '"success_criterion":"Every result exactly matches.",'
                 '"duplicate_experiment_reason":"Verify deterministic reproduction '
                 'after the deployment environment changed."}'
             ),
@@ -405,7 +435,10 @@ class SchedulerTest(unittest.TestCase):
 
         self.assertEqual(experiment_id, "experiment-2")
         self.assertEqual(planner.inputs, [])
-        self.assertEqual(plans.proposals, [])
+        self.assertEqual(len(plans.proposals), 1)
+        self.assertIn("initial complete reference", plans.proposals[0][0]["rationale"])
+        self.assertIn("success_criterion", plans.proposals[0][0])
+        self.assertEqual(plans.started, [("plan-1", "experiment-2")])
         self.assertEqual(
             experiment.calls,
             [
@@ -422,6 +455,25 @@ class SchedulerTest(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_completed_plan_is_evaluated_before_another_is_proposed(self) -> None:
+        experiment = FakeExperimentControl()
+        planner = FakePlanner()
+        plans = MemoryPlanningRepository()
+        plans.pending = {
+            "plan_id": "plan-1",
+            "experiment_id": "experiment-1",
+            "experiment_status": "completed",
+            "proposal": {"rationale": "Establish a baseline.",
+                         "success_criterion": "All simulations complete."},
+        }
+
+        result = asyncio.run(Scheduler(experiment, planner, plans).run_once())
+
+        self.assertIsNone(result)
+        self.assertEqual(len(planner.evaluation_inputs), 1)
+        self.assertEqual(plans.evaluations[0][2], "pass")
+        self.assertEqual(planner.inputs, [])
 
     def test_active_experiment_skips_planning(self) -> None:
         experiment = FakeExperimentControl(status="running")
@@ -455,6 +507,7 @@ class SchedulerTest(unittest.TestCase):
                     "epsilon_start": 0.9,
                     "epsilon_decay": 1.0,
                     "rationale": "Too short.",
+                    "success_criterion": "The aggregate result improves.",
                 },
                 config,
             )
