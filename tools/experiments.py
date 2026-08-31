@@ -83,7 +83,7 @@ def get_experiment_count() -> dict[str, int]:
 
 @mcp.tool()
 def get_current_highscore(experiment_id: str = "") -> dict:
-    """Return the current in-memory highscore without querying MariaDB."""
+    """Return the best live highscore and the simulation ID that achieved it."""
     return ExperimentClient().request(
         MessageType.GET_CURRENT_HIGHSCORE,
         experiment_id=experiment_id or None,

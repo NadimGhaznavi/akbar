@@ -2,7 +2,7 @@ from typing import Final
 
 
 class DExperiment:
-    METHODOLOGY_VERSION: Final[int] = 2
+    METHODOLOGY_VERSION: Final[int] = 3
     PROTOCOL_VERSION: Final[int] = 1
     CONTROL_HOST: Final[str] = "127.0.0.1"
     CONTROL_PORT: Final[int] = 51971

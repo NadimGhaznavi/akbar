@@ -7,6 +7,7 @@ import unittest
 from experiment.ExperimentConfig import ExperimentConfig
 from snake_lab.game.SnakeGame import SnakeGame
 from snake_lab.SnakeExperiment import SnakeExperiment
+from snake_lab.training.ReplayMemory import ReplayMemory
 
 
 class SnakeGameTest(unittest.TestCase):
@@ -31,6 +32,31 @@ class SnakeGameTest(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertTrue(result.done)
         self.assertEqual(result.reason, "collision")
+
+
+class ReplayMemoryTest(unittest.TestCase):
+    def test_episode_batches_are_aligned_from_the_terminal_move(self) -> None:
+        memory = ReplayMemory[int](10, 4, random.Random(1))
+
+        retained = memory.append_episode(range(10))
+
+        self.assertEqual(retained, 8)
+        self.assertEqual(len(memory), 8)
+        self.assertEqual(
+            tuple(memory.batches()),
+            ((2, 3, 4, 5), (6, 7, 8, 9)),
+        )
+
+    def test_capacity_evicts_complete_batches(self) -> None:
+        memory = ReplayMemory[int](10, 4, random.Random(1))
+        memory.append_episode(range(8))
+        memory.append_episode(range(8, 12))
+
+        self.assertEqual(len(memory), 8)
+        self.assertEqual(
+            tuple(memory.batches()),
+            ((4, 5, 6, 7), (8, 9, 10, 11)),
+        )
 
 
 class SnakeExperimentTest(unittest.IsolatedAsyncioTestCase):
