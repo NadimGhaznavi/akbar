@@ -249,6 +249,41 @@ class SchedulerTest(unittest.TestCase):
         self.assertIn("error", decision.evidence[1]["result"])
         self.assertNotIn("error", decision.evidence[2]["result"])
 
+    def test_round_limit_finalizes_when_investigation_has_successful_queries(self) -> None:
+        tool_messages = []
+        for index in range(DScheduler.MAX_INVESTIGATION_ROUNDS):
+            name = "get_database_schema" if index == 0 else "query_experiment_database"
+            arguments = "{}" if index == 0 else '{"sql":"SELECT 1 AS value"}'
+            tool_messages.append({
+                "role": "assistant", "content": None, "tool_calls": [{
+                    "id": f"call-{index}", "type": "function", "function": {
+                        "name": name, "arguments": arguments,
+                    },
+                }],
+            })
+        tool_messages.append({
+            "role": "assistant",
+            "content": (
+                '{"learning_rate":0.0008,"epsilon_start":0.9,'
+                '"epsilon_decay":0.995,"rationale":"Bounded evidence."}'
+            ),
+        })
+        planner = LlamaPlanner(client=FakeHTTPClient(tool_messages))
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+
+        async def execute_tool(name, _arguments):
+            if name == "get_database_schema":
+                return {"tables": {"simulation_runs": []}}
+            return {"rows": [{"value": 1}], "returned": 1}
+
+        decision = asyncio.run(planner.propose(config, execute_tool))
+
+        self.assertEqual(decision.proposal.rationale, "Bounded evidence.")
+        self.assertEqual(
+            len(decision.evidence),
+            DScheduler.MAX_INVESTIGATION_ROUNDS,
+        )
+
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
         experiment = FakeExperimentControl()
         planner = FakePlanner()
