@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.13.0] - 2026-08-30 @ 21:04
+## [0.13.1] - 2026-08-30 @ 21:11
 
-## [0.13.0] - 2026-08-30 @ 21:00
+## [0.13.1] - 2026-08-30 @ 21:10
+
+### Fixed
+
+- Required scheduled investigations to discover the database schema before
+  querying it, returned SQL errors to Akbar for correction, and required at
+  least one successful query before accepting an experiment proposal.
+
+## [0.13.0] - 2026-08-30 @ 21:04
 
 ### Added
 

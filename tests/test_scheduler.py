@@ -5,6 +5,7 @@ import unittest
 from typing import Any
 
 from constants.DScheduler import DScheduler
+from experiment.ExperimentClient import ExperimentClientError
 from experiment.ExperimentProtocol import MessageType
 from scheduler.SchedulerServer import (
     ExperimentProposal,
@@ -35,13 +36,22 @@ class FakeHTTPClient:
             {
                 "role": "assistant",
                 "content": None,
-                "tool_calls": [{
-                    "id": "call-1", "type": "function",
-                    "function": {
-                        "name": "query_experiment_database",
-                        "arguments": '{"sql":"SELECT COUNT(*) AS count FROM simulation_runs"}',
+                "tool_calls": [
+                    {
+                        "id": "call-1", "type": "function",
+                        "function": {
+                            "name": "get_database_schema",
+                            "arguments": "{}",
+                        },
                     },
-                }],
+                    {
+                        "id": "call-2", "type": "function",
+                        "function": {
+                            "name": "query_experiment_database",
+                            "arguments": '{"sql":"SELECT COUNT(*) AS count FROM simulation_runs"}',
+                        },
+                    },
+                ],
             },
             {"role": "assistant", "content": "Investigation complete."},
             {
@@ -169,8 +179,9 @@ class SchedulerTest(unittest.TestCase):
         decision = asyncio.run(planner.propose(config, execute_tool))
 
         self.assertEqual(decision.proposal.learning_rate, 0.0008)
-        self.assertEqual(len(decision.evidence), 1)
-        self.assertEqual(calls[0][0], "query_experiment_database")
+        self.assertEqual(len(decision.evidence), 2)
+        self.assertEqual(calls[0][0], "get_database_schema")
+        self.assertEqual(calls[1][0], "query_experiment_database")
         self.assertEqual(len(http.requests), 3)
         request = http.requests[0][1]
         self.assertIn("tools", request)
@@ -193,8 +204,50 @@ class SchedulerTest(unittest.TestCase):
         async def execute_tool(_name, _arguments):
             return {}
 
-        with self.assertRaisesRegex(PlanningError, "must query"):
+        with self.assertRaisesRegex(PlanningError, "must successfully query"):
             asyncio.run(planner.propose(config, execute_tool))
+
+    def test_planner_receives_sql_errors_and_can_correct_its_query(self) -> None:
+        final_content = (
+            '{"learning_rate":0.0008,"epsilon_start":0.9,'
+            '"epsilon_decay":0.995,"rationale":"Used corrected SQL."}'
+        )
+        http = FakeHTTPClient([
+            {"role": "assistant", "content": None, "tool_calls": [{
+                "id": "schema", "type": "function", "function": {
+                    "name": "get_database_schema", "arguments": "{}",
+                },
+            }]},
+            {"role": "assistant", "content": None, "tool_calls": [{
+                "id": "bad", "type": "function", "function": {
+                    "name": "query_experiment_database",
+                    "arguments": '{"sql":"SELECT * FROM missing"}',
+                },
+            }]},
+            {"role": "assistant", "content": None, "tool_calls": [{
+                "id": "good", "type": "function", "function": {
+                    "name": "query_experiment_database",
+                    "arguments": '{"sql":"SELECT * FROM simulation_runs"}',
+                },
+            }]},
+            {"role": "assistant", "content": "Investigation complete."},
+            {"role": "assistant", "content": final_content},
+        ])
+        planner = LlamaPlanner(client=http)
+        config = FakeExperimentControl().request(MessageType.GET_EXPERIMENT_CONFIG)
+
+        async def execute_tool(name, arguments):
+            if name == "get_database_schema":
+                return {"tables": {"simulation_runs": []}}
+            if "missing" in arguments["sql"]:
+                raise ExperimentClientError("Table 'missing' doesn't exist")
+            return {"rows": [], "returned": 0}
+
+        decision = asyncio.run(planner.propose(config, execute_tool))
+
+        self.assertEqual(decision.proposal.rationale, "Used corrected SQL.")
+        self.assertIn("error", decision.evidence[1]["result"])
+        self.assertNotIn("error", decision.evidence[2]["result"])
 
     def test_idle_cycle_reviews_history_and_starts_one_experiment(self) -> None:
         experiment = FakeExperimentControl()

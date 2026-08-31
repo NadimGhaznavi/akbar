@@ -141,7 +141,8 @@ class LlamaPlanner:
         ]
         evidence: list[dict[str, Any]] = []
         tool_call_count = 0
-        query_count = 0
+        successful_query_count = 0
+        schema_discovered = False
         for _ in range(DScheduler.MAX_INVESTIGATION_ROUNDS):
             message = await self._request_message(
                 messages,
@@ -156,9 +157,9 @@ class LlamaPlanner:
                 assistant_message["tool_calls"] = message["tool_calls"]
             messages.append(assistant_message)
             if not tool_calls:
-                if query_count == 0:
+                if successful_query_count == 0:
                     raise PlanningError(
-                        "planner must query the database before proposing"
+                        "planner must successfully query the database before proposing"
                     )
                 break
             if not isinstance(tool_calls, list):
@@ -168,9 +169,22 @@ class LlamaPlanner:
                 if tool_call_count > DScheduler.MAX_INVESTIGATION_TOOL_CALLS:
                     raise PlanningError("planner exceeded the database tool-call limit")
                 call_id, name, arguments = self._parse_tool_call(tool_call)
-                result = await execute_tool(name, arguments)
-                if name == "query_experiment_database":
-                    query_count += 1
+                if name == "query_experiment_database" and not schema_discovered:
+                    result = {
+                        "error": (
+                            "Discover the database schema before issuing SQL so "
+                            "table and column names are evidence-based."
+                        )
+                    }
+                else:
+                    try:
+                        result = await execute_tool(name, arguments)
+                    except ExperimentClientError as error:
+                        result = {"error": str(error)}
+                if name == "get_database_schema" and "error" not in result:
+                    schema_discovered = True
+                if name == "query_experiment_database" and "error" not in result:
+                    successful_query_count += 1
                 evidence.append(
                     {"tool": name, "arguments": arguments, "result": result}
                 )
