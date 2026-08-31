@@ -197,7 +197,16 @@ class LlamaPlanner:
                     }
                 )
         else:
-            raise PlanningError("planner did not complete its database investigation")
+            if successful_query_count == 0:
+                raise PlanningError(
+                    "planner reached the investigation limit without a successful query"
+                )
+            LOGGER.info(
+                "planner reached the %d-round investigation limit; "
+                "requesting its final proposal from %d successful queries",
+                DScheduler.MAX_INVESTIGATION_ROUNDS,
+                successful_query_count,
+            )
 
         messages.append(
             {

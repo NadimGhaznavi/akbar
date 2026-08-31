@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import zmq
 import zmq.asyncio
+from pymysql.err import MySQLError
 
 from constants.DAkbar import DAkbar
 from constants.DExperiment import DExperiment
@@ -129,7 +130,7 @@ class ExperimentServer:
         try:
             request = ExperimentMessage.from_json(raw_message)
             return await self._dispatch(request)
-        except (ProtocolError, ValueError, TypeError) as error:
+        except (ProtocolError, ValueError, TypeError, MySQLError) as error:
             LOG.info("Rejected control request: %s", error)
             if request is not None:
                 return request.reply(MessageType.ERROR, {"error": str(error)})
