@@ -13,7 +13,9 @@
 # theme                  : "minimal-mistakes-jekyll"
 remote_theme: "NadimGhaznavi/minimal-mistakes"
 #remote_theme: "mmistakes/minimal-mistakes"
-
+mycount:
+    endpoint: "https://count.osoyalce.com/count"
+    site: "akbar"
 # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 minimal_mistakes_skin: "dark"
 #minimal_mistakes_skin: "sunrise"
